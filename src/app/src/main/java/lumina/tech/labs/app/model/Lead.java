@@ -1,6 +1,6 @@
 package lumina.tech.labs.app.model;
 
-import com.luminatechlabs.platform.domain.enums.Priority;
+import lumina.tech.labs.app.enums.Priority;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
@@ -127,5 +127,15 @@ public class Lead {
     public void addCrmSyncLog(CrmSyncLog log) {
         crmSyncLogs.add(log);
         log.setLead(this);
+    }
+
+    @PrePersist
+    private void prePersist(){
+        this.createdAt = LocalDateTime.now();
+    }
+
+    @PreUpdate
+    private void preUpdate(){
+        this.updatedAt = LocalDateTime.now();
     }
 }

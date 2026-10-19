@@ -1,0 +1,112 @@
+name: lumina-lead-platform
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: lumina-postgres
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-lumina}
+      POSTGRES_USER: ${POSTGRES_USER:-lumina}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-lumina_dev_password}
+    ports:
+      - "5432:5432"
+    volumes:
+      - lumina_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${POSTGRES_USER:-lumina} -d ${POSTGRES_DB:-lumina}",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - lumina-network
+
+  redis:
+    image: redis:7-alpine
+    container_name: lumina-redis
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - lumina-network
+
+  # Local SMTP catcher for EmailNotificationService — web UI at http://localhost:8025
+  # to inspect outgoing emails without a real provider. Swap MAIL_HOST/MAIL_PORT
+  # for SendGrid/SES in production and remove this service.
+  mailhog:
+    image: mailhog/mailhog:v1.0.1
+    container_name: lumina-mailhog
+    ports:
+      - "1025:1025"
+      - "8025:8025"
+    networks:
+      - lumina-network
+
+  backend:
+    build:
+      context: ./src/app
+      dockerfile: Dockerfile
+    container_name: lumina-backend
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      mailhog:
+        condition: service_started
+    environment:
+      DB_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-lumina}
+      DB_USER: ${POSTGRES_USER:-lumina}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-lumina_dev_password}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      MAIL_HOST: mailhog
+      MAIL_PORT: 1025
+      MAIL_USERNAME: ${MAIL_USERNAME:-apikey}
+      MAIL_PASSWORD: ${MAIL_PASSWORD:-changeme}
+      MAIL_FROM: ${MAIL_FROM:-no-reply@luminatechlabs.com}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:4200}
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET must be set in .env}
+      CRM_ACTIVE_PROVIDER: ${CRM_ACTIVE_PROVIDER:-HUBSPOT}
+      SALES_WEBHOOK_URL: ${SALES_WEBHOOK_URL:-https://hooks.slack.com/services/CHANGE-ME}
+    ports:
+      - "8080:8080"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8080/actuator/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    networks:
+      - lumina-network
+  frontend:
+    build:
+      context: ./src/public
+      dockerfile: Dockerfile
+    container_name: lumina-frontend
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "4200:80"
+    healthcheck:
+      test: ["CMD", "wget", "-qO", "/dev/null", "http://127.0.0.1/"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - lumina-network
+
+volumes:
+  lumina_postgres_data:
+
+networks:
+  lumina-network:
+    driver: bridge

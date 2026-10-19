@@ -58,4 +58,10 @@ public class Company {
         leads.add(lead);
         lead.setCompany(this);
     }
+
+    @PrePersist
+    private void prePersist(){
+        this.createdAt = LocalDateTime.now();
+    }
+
 }

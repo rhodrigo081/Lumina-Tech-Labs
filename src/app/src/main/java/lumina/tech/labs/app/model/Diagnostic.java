@@ -63,4 +63,10 @@ public class Diagnostic {
     @CreationTimestamp
     @Column(name = "calculated_at", updatable = false)
     private LocalDateTime calculatedAt;
+
+    @PrePersist
+    private void prePersist(){
+        this.calculatedAt = LocalDateTime.now();
+    }
+
 }

@@ -50,4 +50,10 @@ public class CrmSyncLog {
     @CreationTimestamp
     @Column(name = "synced_at", updatable = false)
     private LocalDateTime syncedAt;
+
+    @PrePersist
+    private void prePersist(){
+        this.syncedAt = LocalDateTime.now();
+    }
+
 }

@@ -1,0 +1,126 @@
+/* ===== Tema: tokens de cor (triplas RGB para suportar opacidade do Tailwind) ===== */
+:root {
+  color-scheme: light;
+  --c-on-background: 34 26 21;
+  --c-on-secondary-container: 80 104 114;
+  --c-error-container: 255 218 214;
+  --c-background: 255 248 245;
+  --c-on-surface: 34 26 21;
+  --c-primary-container: 38 72 87;
+  --c-on-tertiary-fixed-variant: 44 77 68;
+  --c-inverse-on-surface: 254 237 229;
+  --c-secondary-fixed-dim: 177 202 213;
+  --c-on-primary: 255 255 255;
+  --c-surface-tint: 66 99 115;
+  --c-surface-container-highest: 240 223 215;
+  --c-on-surface-variant: 66 72 75;
+  --c-tertiary-fixed: 198 234 222;
+  --c-secondary-fixed: 205 231 242;
+  --c-primary-fixed: 197 232 250;
+  --c-primary-fixed-dim: 169 204 222;
+  --c-on-primary-fixed: 0 31 42;
+  --c-primary: 12 50 64;
+  --c-on-primary-fixed-variant: 41 75 90;
+  --c-inverse-surface: 56 46 41;
+  --c-on-secondary-fixed-variant: 51 74 83;
+  --c-on-secondary: 255 255 255;
+  --c-surface-dim: 231 215 207;
+  --c-on-tertiary-container: 149 185 173;
+  --c-outline: 114 120 124;
+  --c-on-tertiary-fixed: 0 32 25;
+  --c-on-primary-container: 148 182 200;
+  --c-secondary: 74 98 107;
+  --c-surface-container: 252 235 226;
+  --c-on-tertiary: 255 255 255;
+  --c-tertiary-fixed-dim: 170 206 194;
+  --c-surface-container-low: 255 241 234;
+  --c-surface-container-lowest: 255 255 255;
+  --c-surface: 255 248 245;
+  --c-inverse-primary: 169 204 222;
+  --c-outline-variant: 193 199 203;
+  --c-error: 186 26 26;
+  --c-on-error-container: 147 0 10;
+  --c-surface-bright: 255 248 245;
+  --c-on-error: 255 255 255;
+  --c-on-secondary-fixed: 5 30 39;
+  --c-secondary-container: 205 231 242;
+  --c-tertiary-container: 41 74 65;
+  --c-tertiary: 17 51 43;
+  --c-surface-container-high: 246 229 221;
+  --c-surface-variant: 240 223 215;
+  --c-fg-primary: 12 50 64;
+  --c-fg-secondary: 74 98 107;
+  --c-fg-tertiary: 17 51 43;
+  --c-fg-error: 186 26 26;
+  --c-lit-tertiary: 198 234 222;
+  --c-lit-tertiary-dim: 170 206 194;
+  --c-lit-on-tertiary: 0 32 25;
+  --c-lit-secondary: 205 231 242;
+  --sk-lo: 252 235 226; --sk-hi: 255 255 255; --sk-sage-lo: 205 231 242; --sk-sage-hi: 255 255 255;
+}
+/* Escuro: aplicado pela classe .dark no <html> (ThemeService). Na impressão sempre usa o claro. */
+@media not print {
+  html.dark {
+    color-scheme: dark;
+    --c-background: 20 16 13;
+    --c-surface: 20 16 13;
+    --c-surface-dim: 20 16 13;
+    --c-surface-bright: 58 50 43;
+    --c-surface-container-lowest: 34 27 22;
+    --c-surface-container-low: 43 35 29;
+    --c-surface-container: 51 42 35;
+    --c-surface-container-high: 60 50 42;
+    --c-surface-container-highest: 70 59 50;
+    --c-surface-variant: 70 59 50;
+    --c-on-surface: 236 224 217;
+    --c-on-background: 236 224 217;
+    --c-on-surface-variant: 193 199 203;
+    --c-outline: 139 146 150;
+    --c-outline-variant: 66 72 75;
+    --c-inverse-surface: 236 224 217;
+    --c-inverse-on-surface: 56 46 41;
+    --c-inverse-primary: 66 99 115;
+    --c-surface-tint: 169 204 222;
+    --c-primary: 38 75 92;
+    --c-primary-container: 43 88 108;
+    --c-on-primary-container: 197 232 250;
+    --c-secondary: 79 106 117;
+    --c-secondary-container: 51 74 83;
+    --c-on-secondary-container: 205 231 242;
+    --c-tertiary: 47 107 85;
+    --c-tertiary-container: 45 90 73;
+    --c-tertiary-fixed: 38 70 56;
+    --c-on-tertiary-fixed: 198 234 222;
+    --c-on-tertiary-fixed-variant: 170 206 194;
+    --c-tertiary-fixed-dim: 58 106 88;
+    --c-secondary-fixed: 46 68 77;
+    --c-on-secondary-fixed: 205 231 242;
+    --c-on-secondary-fixed-variant: 205 231 242;
+    --c-error-container: 147 0 10;
+    --c-on-error-container: 255 218 214;
+    --c-fg-primary: 169 204 222;
+    --c-fg-secondary: 177 202 213;
+    --c-fg-tertiary: 170 206 194;
+    --c-fg-error: 255 180 171;
+    --sk-lo: 44 36 30; --sk-hi: 65 55 46; --sk-sage-lo: 46 68 77; --sk-sage-hi: 69 96 104;
+  }
+}
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html, body { margin: 0; padding: 0; }
+body { overscroll-behavior: none; }
+.material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24; user-select: none; }
+:focus-visible { outline: 2px solid rgb(var(--c-fg-primary)); outline-offset: 2px; }
+
+/* Skeletons (zero CLS): mesmas dimensões do conteúdo real */
+@keyframes ecometricShimmer { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
+@keyframes ecometricProgress { 0% { width: 12%; transform: translateX(0); } 50% { width: 68%; transform: translateX(25%); } 100% { width: 100%; transform: translateX(0); } }
+.sk { border-radius: 0.25rem; background: linear-gradient(90deg, rgb(var(--sk-lo)) 0%, rgb(var(--sk-hi)) 45%, rgb(var(--sk-lo)) 100%); background-size: 200% 100%; animation: ecometricShimmer 1.8s cubic-bezier(.4,0,.2,1) infinite; }
+.sk-sage { background: linear-gradient(90deg, rgb(var(--sk-sage-lo)) 0%, rgb(var(--sk-sage-hi)) 50%, rgb(var(--sk-sage-lo)) 100%); background-size: 200% 100%; }
+.loader-bar { animation: ecometricProgress 2.4s ease-in-out infinite alternate; }
+
+@media (prefers-reduced-motion: reduce) { .sk, .loader-bar { animation: none; } }
+@media print { [data-chrome], .no-print { display: none !important; } main { padding: 0 !important; } }

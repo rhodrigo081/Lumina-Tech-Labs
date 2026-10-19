@@ -52,4 +52,10 @@ public class Schedule {
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;
+
+    @PrePersist
+    private void prePersist(){
+        this.createdAt = LocalDateTime.now();
+    }
+
 }

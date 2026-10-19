@@ -50,4 +50,10 @@ public class ConsentLog {
     void setLead(Lead lead) {
         this.lead = lead;
     }
+
+    @PrePersist
+    private void prePersist(){
+        this.acceptedAt = LocalDateTime.now();
+    }
+
 }
