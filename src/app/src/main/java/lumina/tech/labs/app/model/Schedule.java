@@ -5,7 +5,7 @@ import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.UUID;
 
 /**
@@ -36,11 +36,26 @@ public class Schedule {
             foreignKey = @ForeignKey(name = "fk_schedule_lead"))
     private Lead lead;
 
+    /** Display name of the technician at booking time (kept for history even if the technician is renamed). */
     @Column(name = "sdr_assigned", length = 150)
     private String sdrAssigned;
 
+    /** Technician running the meeting. Nullable only for rows created before V2. */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "technician_id", foreignKey = @ForeignKey(name = "fk_schedule_technician"))
+    private Technician technician;
+
+    /** Availability slot consumed by this booking. Nullable only for rows created before V2. */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "slot_id", foreignKey = @ForeignKey(name = "fk_schedule_slot"))
+    private AvailabilitySlot slot;
+
+    /** Event id returned by the calendar provider, filled after commit by ScheduleBookedEventListener. */
+    @Column(name = "calendar_event_id", length = 255)
+    private String calendarEventId;
+
     @Column(name = "meeting_time")
-    private LocalDateTime meetingTime;
+    private Instant meetingTime;
 
     @Column(name = "video_link", length = 500)
     private String videoLink;
@@ -51,11 +66,7 @@ public class Schedule {
 
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)
-    private LocalDateTime createdAt;
+    private Instant createdAt;
 
-    @PrePersist
-    private void prePersist(){
-        this.createdAt = LocalDateTime.now();
-    }
 
 }

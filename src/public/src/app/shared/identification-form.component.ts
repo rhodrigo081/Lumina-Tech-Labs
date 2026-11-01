@@ -1,24 +1,19 @@
 import { Component, input } from '@angular/core';
-import { AbstractControl, NonNullableFormBuilder, ReactiveFormsModule, ValidationErrors, Validators } from '@angular/forms';
+import { NonNullableFormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { Identification } from '../core/models';
-import { isGenericDomain, maskPhone } from '../core/utils';
+import { maskPhone } from '../core/utils';
 
 type Field = 'name' | 'role' | 'company' | 'phone' | 'email';
 
-const corporateEmailValidator = (c: AbstractControl): ValidationErrors | null => {
-  const v = String(c.value ?? '');
-  return v.includes('@') && isGenericDomain(v) ? { genericDomain: true } : null;
-};
-
 /** Cria o grupo de campos de identificação do cliente (mesmas regras em todas as telas). */
-export function buildIdentificationGroup(fb: NonNullableFormBuilder, opts: { corporateEmail?: boolean; initial?: Partial<Identification> } = {}) {
+export function buildIdentificationGroup(fb: NonNullableFormBuilder, opts: { initial?: Partial<Identification> } = {}) {
   const i = opts.initial ?? {};
   return fb.group({
     name: [i.name ?? '', Validators.required],
     role: [i.role ?? '', Validators.required],
     company: [i.company ?? '', Validators.required],
     phone: [i.phone ?? '', [Validators.required, Validators.minLength(14)]],
-    email: [i.email ?? '', [Validators.required, Validators.email, ...(opts.corporateEmail ? [corporateEmailValidator] : [])]],
+    email: [i.email ?? '', [Validators.required, Validators.email]],
   });
 }
 export type IdentificationGroup = ReturnType<typeof buildIdentificationGroup>;
@@ -58,17 +53,13 @@ export type IdentificationGroup = ReturnType<typeof buildIdentificationGroup>;
         </div>
       </div>
       <div class="flex flex-col gap-1">
-        <div class="flex items-center justify-between gap-2">
-          <label [for]="prefix() + '-email'" class="font-label-lg text-label-lg text-fg-primary font-semibold">{{ corporateEmail() ? 'E-mail corporativo' : 'E-mail' }} *</label>
-          @if (emailOk()) { <span class="font-label-mono text-label-mono px-2 py-0.5 rounded bg-tertiary-fixed text-on-tertiary-fixed font-bold">Domínio corporativo válido</span> }
-        </div>
+        <label [for]="prefix() + '-email'" class="font-label-lg text-label-lg text-fg-primary font-semibold">E-mail *</label>
         <div class="relative">
-          <input [id]="prefix() + '-email'" type="email" formControlName="email" autocomplete="email" placeholder="seunome&#64;suaempresa.com.br"
+          <input [id]="prefix() + '-email'" type="email" formControlName="email" autocomplete="email" placeholder="seunome&#64;email.com.br"
             class="w-full h-12 px-4 pr-10 rounded-lg bg-surface-container-low text-fg-primary" [attr.aria-invalid]="!!err('email')" [attr.aria-describedby]="err('email') ? prefix() + '-email-err' : null" />
-          <span class="absolute right-3.5 top-3 material-symbols-outlined text-[20px]" [class]="err('email') ? 'text-fg-error' : emailOk() ? 'text-fg-tertiary' : 'text-fg-secondary'" aria-hidden="true">{{ err('email') ? 'error' : emailOk() ? 'check_circle' : 'mail' }}</span>
+          <span class="absolute right-3.5 top-3 material-symbols-outlined text-[20px]" [class]="err('email') ? 'text-fg-error' : 'text-fg-secondary'" aria-hidden="true">{{ err('email') ? 'error' : 'mail' }}</span>
         </div>
         @if (err('email'); as m) { <p [id]="prefix() + '-email-err'" class="font-body-sm text-body-sm text-fg-error" role="alert">{{ m }}</p> }
-        @else if (corporateEmail()) { <p class="font-body-sm text-body-sm text-fg-secondary">Não aceitamos provedores de uso pessoal (&#64;gmail, &#64;hotmail, &#64;outlook, &#64;yahoo).</p> }
       </div>
     </div>
   `,
@@ -78,18 +69,13 @@ export class IdentificationFormComponent {
   /** Prefixo dos ids dos campos (evita ids repetidos quando há mais de um formulário na tela). */
   readonly prefix = input('cli');
   readonly nameLabel = input('Nome completo');
-  /** Exige e-mail corporativo (rejeita Gmail, Hotmail etc.). */
-  readonly corporateEmail = input(false);
   /** Mensagem vinda do servidor para o campo de e-mail (ex.: HTTP 400). */
   readonly serverError = input<string | null>(null);
-
-  emailOk(): boolean { const c = this.group().controls.email; return this.corporateEmail() && !this.serverError() && c.valid && c.value.includes('@'); }
 
   err(f: Field): string | null {
     const c = this.group().controls[f];
     if (f === 'email') {
       if (this.serverError()) return this.serverError();
-      if (c.hasError('genericDomain') && (c.dirty || c.touched)) return 'Use o e-mail corporativo da sua empresa: provedores pessoais não são aceitos.';
     }
     if (!c.invalid || !c.touched) return null;
     if (c.hasError('required')) return 'Campo obrigatório.';

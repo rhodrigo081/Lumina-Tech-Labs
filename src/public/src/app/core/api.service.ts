@@ -1,25 +1,42 @@
 import { HttpClient, HttpContext } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { API_BASE, SILENT } from './config';
-import { Booking, BookingRequest, ContactReceipt, ContactRequest, DaySlots, DiagnosticInput, DiagnosticResult, LeadForm, Report } from './models';
+import {
+  BookingRequest, BookingResponse, ContactReceipt, ContactRequest, DiagnosticInput, DiagnosticResult, LeadRequest, LeadResponse, Slot,
+} from './models';
 
+/** Único lugar com chamadas HTTP. Contratos conforme o Swagger do backend (/api/v1). */
 @Injectable({ providedIn: 'root' })
 export class ApiService {
   private readonly http = inject(HttpClient);
 
+  /** POST /diagnostics/preview */
   preview(input: DiagnosticInput) {
     return this.http.post<DiagnosticResult>(`${API_BASE}/diagnostics/preview`, input, { context: new HttpContext().set(SILENT, true) });
   }
-  createLead(lead: LeadForm, input: DiagnosticInput, idempotencyKey: string) {
-    return this.http.post<{ id: string }>(`${API_BASE}/leads`, { lead, input }, { headers: { 'X-Idempotency-Key': idempotencyKey } });
+
+  /** POST /leads — o header Idempotency-Key evita lead duplicado em reenvios. */
+  createLead(body: LeadRequest, idempotencyKey: string) {
+    return this.http.post<LeadResponse>(`${API_BASE}/leads`, body, { headers: { 'Idempotency-Key': idempotencyKey } });
   }
-  getReport(id: string) { return this.http.get<Report>(`${API_BASE}/leads/${encodeURIComponent(id)}/report`); }
+
+  /** GET /leads/{id}/report — o backend devolve o relatório como texto. */
+  getReportText(leadId: string) {
+    return this.http.get(`${API_BASE}/leads/${encodeURIComponent(leadId)}/report`, { responseType: 'text' });
+  }
+
+  /** GET /schedule/slots — horários livres criados pela equipe (opcionalmente de um técnico). */
+  getSlots(technicianId?: string) {
+    return this.http.get<Slot[]>(`${API_BASE}/schedule/slots`, { params: technicianId ? { technicianId } : {} });
+  }
+
+  /** POST /schedule/book */
+  book(body: BookingRequest) {
+    return this.http.post<BookingResponse>(`${API_BASE}/schedule/book`, body);
+  }
+
+  /** POST /contact — endpoint a ser criado no backend (não consta no Swagger atual). */
   sendContact(body: ContactRequest, idempotencyKey: string) {
-    return this.http.post<ContactReceipt>(`${API_BASE}/contact`, body, { headers: { 'X-Idempotency-Key': idempotencyKey } });
-  }
-  getBooking(protocol: string) { return this.http.get<Booking>(`${API_BASE}/schedule/bookings/${encodeURIComponent(protocol)}`); }
-  getSlots() { return this.http.get<DaySlots[]>(`${API_BASE}/schedule/slots`); }
-  book(req: BookingRequest, idempotencyKey: string) {
-    return this.http.post<Booking>(`${API_BASE}/schedule/book`, req, { headers: { 'X-Idempotency-Key': idempotencyKey } });
+    return this.http.post<ContactReceipt | null>(`${API_BASE}/contact`, body, { headers: { 'Idempotency-Key': idempotencyKey } });
   }
 }

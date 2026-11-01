@@ -1,7 +1,9 @@
 package lumina.tech.labs.app.exception;
 
-public class DuplicateLeadException extends RuntimeException {
+import org.springframework.http.HttpStatus;
+
+public class DuplicateLeadException extends ApiException {
     public DuplicateLeadException(String corporateEmail) {
-        super("A lead already exists for email: " + corporateEmail);
+        super(HttpStatus.CONFLICT, "DUPLICATE_LEAD", "A lead already exists for email: " + corporateEmail);
     }
 }

@@ -1,8 +1,15 @@
 package lumina.tech.labs.app.exception;
 
-/** Thrown when an Idempotency-Key was already processed (guards double form-submits). */
-public class IdempotentReplayException extends RuntimeException {
+import org.springframework.http.HttpStatus;
+
+/**
+ * The same Idempotency-Key is still being processed by another request
+ * (e.g. double click). Completed keys never raise this: they replay the
+ * original response instead (see IdempotencyService).
+ */
+public class IdempotentReplayException extends ApiException {
     public IdempotentReplayException(String idempotencyKey) {
-        super("Request with Idempotency-Key '" + idempotencyKey + "' was already processed");
+        super(HttpStatus.CONFLICT, "REQUEST_IN_PROGRESS",
+                "Request with Idempotency-Key '" + idempotencyKey + "' is still being processed");
     }
 }

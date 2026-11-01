@@ -1,34 +1,37 @@
 package lumina.tech.labs.app.listener;
 
-import lumina.tech.labs.app.model.Lead;
-import lumina.tech.labs.app.model.Schedule;
 import lumina.tech.labs.app.event.ScheduleBookedEvent;
-import lumina.tech.labs.app.repository.LeadRepository;
-import lumina.tech.labs.app.repository.ScheduleRepository;
-import lumina.tech.labs.app.service.NotificationService;
+import lumina.tech.labs.app.event.ScheduleCancelledEvent;
+import lumina.tech.labs.app.service.ScheduleService;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
 
+/**
+ * After a booking commits: creates the calendar event and sends the
+ * confirmations. Doing the calendar call here (and not inside the booking
+ * transaction) means a failed INSERT can no longer leave an orphan event
+ * in the technician's calendar.
+ */
 @Component
 public class ScheduleBookedEventListener {
 
-    private final NotificationService notificationService;
-    private final LeadRepository leadRepository;
-    private final ScheduleRepository scheduleRepository;
+    private final ScheduleService scheduleService;
 
-    public ScheduleBookedEventListener(NotificationService notificationService,
-                                        LeadRepository leadRepository,
-                                        ScheduleRepository scheduleRepository) {
-        this.notificationService = notificationService;
-        this.leadRepository = leadRepository;
-        this.scheduleRepository = scheduleRepository;
+    public ScheduleBookedEventListener(ScheduleService scheduleService) {
+        this.scheduleService = scheduleService;
     }
 
+    @Async
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onScheduleBooked(ScheduleBookedEvent event) {
-        Lead lead = leadRepository.findById(event.leadId()).orElseThrow();
-        Schedule schedule = scheduleRepository.findById(event.scheduleId()).orElseThrow();
-        notificationService.notifyScheduleConfirmed(lead, schedule);
+        scheduleService.handleBooked(event.scheduleId());
+    }
+
+    @Async
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    public void onScheduleCancelled(ScheduleCancelledEvent event) {
+        scheduleService.handleCancelled(event.scheduleId());
     }
 }

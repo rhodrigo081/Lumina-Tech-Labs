@@ -19,7 +19,7 @@ public class CorsConfig {
 
     @Bean
     public CorsConfigurationSource corsConfigurationSource(
-            @Value("${lumina.cors.allowed-origins") List<String> allowedOrigins) {
+            @Value("${lumina.cors.allowed-origins}") List<String> allowedOrigins) {
 
         CorsConfiguration configuration = new CorsConfiguration();
         configuration.setAllowedOrigins(allowedOrigins);

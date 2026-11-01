@@ -12,7 +12,6 @@ import lumina.tech.labs.app.engine.DiagnosticCalculationStrategy;
 import lumina.tech.labs.app.engine.DiagnosticEstimate;
 import lumina.tech.labs.app.engine.ScoringEngine;
 import lumina.tech.labs.app.exception.DuplicateLeadException;
-import lumina.tech.labs.app.exception.IdempotentReplayException;
 import lumina.tech.labs.app.exception.LeadNotFoundException;
 import lumina.tech.labs.app.repository.CompanyRepository;
 import lumina.tech.labs.app.repository.LeadRepository;
@@ -58,15 +57,22 @@ public class LeadService {
 
     @Transactional
     public LeadResponse captureLead(LeadCaptureRequest request, String idempotencyKey, String sourceIp) {
-        if (idempotencyKey != null && !idempotencyService.reserve(idempotencyKey)) {
-            throw new IdempotentReplayException(idempotencyKey);
+        IdempotencyService.Reservation reservation = null;
+        if (idempotencyKey != null) {
+            IdempotencyService.Result idempotency = idempotencyService.begin("lead", idempotencyKey);
+            if (idempotency.completedResourceId().isPresent()) {
+                // Same key already succeeded (e.g. the client retried after a timeout): replay it.
+                return toResponse(getLeadOrThrow(idempotency.completedResourceId().get()));
+            }
+            reservation = idempotency.reservation();
         }
 
-        if (leadRepository.existsByCorporateEmail(request.corporateEmail())) {
-            throw new DuplicateLeadException(request.corporateEmail());
+        String email = request.corporateEmail().trim().toLowerCase();
+        if (leadRepository.existsByCorporateEmail(email)) {
+            throw new DuplicateLeadException(email);
         }
 
-        Company company = findOrCreateCompany(request.companyName(), extractDomain(request.corporateEmail()));
+        Company company = findOrCreateCompany(request.companyName(), extractDomain(email));
 
         // --- Diagnostic: map raw input, then fill in the calculated fields ---
         Diagnostic diagnostic = leadMapper.toEntity(request.diagnostic());
@@ -79,10 +85,10 @@ public class LeadService {
         // --- Lead: assign company, priority (FR03.2), and link Diagnostic (1:1) ---
         Lead lead = Lead.builder()
                 .company(company)
-                .fullName(request.fullName())
-                .corporateEmail(request.corporateEmail())
+                .fullName(request.fullName().trim())
+                .corporateEmail(email)
                 .phone(request.phone())
-                .jobTitle(request.jobTitle())
+                .jobTitle(request.jobTitle().trim())
                 .priority(scoringEngine.score(request.diagnostic()))
                 .build();
         lead.assignDiagnostic(diagnostic); // sets both sides: lead.diagnostic and diagnostic.lead
@@ -95,16 +101,24 @@ public class LeadService {
         lead.addConsentLog(consent);
 
         // cascade = ALL on Lead.diagnostic/consentLogs persists both in this single INSERT batch.
-        Lead saved = leadRepository.save(lead);
+        // saveAndFlush: constraint violations surface HERE (inside the transaction) instead of at commit.
+        Lead saved = leadRepository.saveAndFlush(lead);
+        if (reservation != null) {
+            reservation.complete(saved.getId());
+        }
 
         // Published now, but only actually delivered to listeners AFTER this @Transactional
-        // method commits (see LeadQualifiedEventListener / CrmSyncEventListener, phase = AFTER_COMMIT).
+        // method commits (see NotificationEventListener / CrmSyncEventListener, phase = AFTER_COMMIT).
         eventPublisher.publishEvent(new LeadQualifiedEvent(saved.getId(), saved.getPriority()));
 
-        LeadResponse response = leadMapper.toResponse(saved);
+        return toResponse(saved);
+    }
+
+    public LeadResponse toResponse(Lead lead) {
+        LeadResponse response = leadMapper.toResponse(lead);
         return new LeadResponse(response.id(), response.fullName(), response.corporateEmail(),
                 response.companyName(), response.priority(), response.createdAt(), response.diagnostic(),
-                "/api/v1/leads/" + saved.getId() + "/report");
+                "/api/v1/leads/" + lead.getId() + "/report");
     }
 
     @Transactional(readOnly = true)
@@ -114,12 +128,16 @@ public class LeadService {
     }
 
     private Company findOrCreateCompany(String companyName, String emailDomain) {
-        return companyRepository.findByEmailDomain(emailDomain)
+        if (EmailDomains.isPersonal(emailDomain)) {
+            // gmail.com & co. say nothing about the employer: never group these leads.
+            return companyRepository.save(Company.builder().name(companyName.trim()).emailDomain(emailDomain).build());
+        }
+        return companyRepository.findFirstByEmailDomainOrderByCreatedAtAsc(emailDomain)
                 .orElseGet(() -> companyRepository.save(
-                        Company.builder().name(companyName).emailDomain(emailDomain).build()));
+                        Company.builder().name(companyName.trim()).emailDomain(emailDomain).build()));
     }
 
     private String extractDomain(String email) {
-        return email.substring(email.indexOf('@') + 1).toLowerCase();
+        return email.substring(email.indexOf('@') + 1).toLowerCase().trim();
     }
 }

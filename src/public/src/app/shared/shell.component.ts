@@ -27,7 +27,7 @@ const STORAGE_KEY = 'ecm.sidebar.collapsed';
       [class]="(mobileOpen() ? 'translate-x-0 ' : '-translate-x-full ') + 'lg:translate-x-0 ' + (collapsed() ? 'lg:w-[76px]' : 'lg:w-[264px]')">
 
       <div class="h-20 px-4 flex items-center gap-space-sm shrink-0" [class]="collapsed() ? 'lg:justify-center' : ''">
-        <span class="w-10 h-10 rounded-xl bg-primary-container text-on-primary flex items-center justify-center shrink-0"><span class="material-symbols-outlined text-[22px]" aria-hidden="true">bolt</span></span>
+        <img src="assets/logo-mark.png" alt="" width="40" height="40" class="w-10 h-10 object-contain shrink-0" />
         <span class="font-headline-sm text-headline-sm text-fg-primary font-bold tracking-tight" [class]="collapsed() ? 'lg:hidden' : ''">Lumina Tech Labs</span>
       </div>
 

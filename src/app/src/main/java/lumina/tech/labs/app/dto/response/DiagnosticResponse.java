@@ -1,7 +1,7 @@
 package lumina.tech.labs.app.dto.response;
 
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.UUID;
 
 /**
@@ -19,7 +19,7 @@ public record DiagnosticResponse(
         BigDecimal annualSavings,
         BigDecimal paybackMonths,
         BigDecimal co2ReductionTons,
-        LocalDateTime calculatedAt
+        Instant calculatedAt
 ) {
     /** Factory for the unsaved preview response (GET /api/v1/diagnostics/preview). */
     public static DiagnosticResponse preview(BigDecimal consumptionReductionPct,

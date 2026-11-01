@@ -1,29 +1,6 @@
 name: lumina-lead-platform
 
 services:
-  postgres:
-    image: postgres:16-alpine
-    container_name: lumina-postgres
-    environment:
-      POSTGRES_DB: ${POSTGRES_DB:-lumina}
-      POSTGRES_USER: ${POSTGRES_USER:-lumina}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-lumina_dev_password}
-    ports:
-      - "5432:5432"
-    volumes:
-      - lumina_postgres_data:/var/lib/postgresql/data
-    healthcheck:
-      test:
-        [
-          "CMD-SHELL",
-          "pg_isready -U ${POSTGRES_USER:-lumina} -d ${POSTGRES_DB:-lumina}",
-        ]
-      interval: 5s
-      timeout: 5s
-      retries: 10
-    networks:
-      - lumina-network
-
   redis:
     image: redis:7-alpine
     container_name: lumina-redis
@@ -55,27 +32,34 @@ services:
       dockerfile: Dockerfile
     container_name: lumina-backend
     depends_on:
-      postgres:
-        condition: service_healthy
       redis:
         condition: service_healthy
       mailhog:
         condition: service_started
     environment:
-      DB_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-lumina}
-      DB_USER: ${POSTGRES_USER:-lumina}
-      DB_PASSWORD: ${POSTGRES_PASSWORD:-lumina_dev_password}
+      DB_URL: jdbc:postgresql://${DB_HOST}:${DB_PORT}/postgres?sslmode=require&prepareThreshold=0
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
       REDIS_HOST: redis
       REDIS_PORT: 6379
       MAIL_HOST: mailhog
       MAIL_PORT: 1025
-      MAIL_USERNAME: ${MAIL_USERNAME:-apikey}
-      MAIL_PASSWORD: ${MAIL_PASSWORD:-changeme}
-      MAIL_FROM: ${MAIL_FROM:-no-reply@luminatechlabs.com}
-      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:4200}
-      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET must be set in .env}
-      CRM_ACTIVE_PROVIDER: ${CRM_ACTIVE_PROVIDER:-HUBSPOT}
-      SALES_WEBHOOK_URL: ${SALES_WEBHOOK_URL:-https://hooks.slack.com/services/CHANGE-ME}
+      MAIL_USERNAME: ${MAIL_USERNAME}
+      MAIL_PASSWORD: ${MAIL_PASSWORD}
+      MAIL_FROM: ${MAIL_FROM}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS}
+      JWT_SECRET: ${JWT_SECRET}
+      ADMIN_EMAIL: ${ADMIN_EMAIL}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD}
+      ADMIN_NAME: ${ADMIN_NAME}
+      CRM_ACTIVE_PROVIDER: ${CRM_ACTIVE_PROVIDER}
+      SALES_WEBHOOK_URL: ${SALES_WEBHOOK_URL}
+      MEETING_PROVIDER: ${MEETING_PROVIDER:-jitsi}
+      JITSI_BASE_URL: ${JITSI_BASE_URL:-https://meet.jit.si}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      GOOGLE_REFRESH_TOKEN: ${GOOGLE_REFRESH_TOKEN:-}
+      GOOGLE_CALENDAR_ID: ${GOOGLE_CALENDAR_ID:-primary}
     ports:
       - "8080:8080"
     healthcheck:
@@ -103,9 +87,6 @@ services:
       retries: 5
     networks:
       - lumina-network
-
-volumes:
-  lumina_postgres_data:
 
 networks:
   lumina-network:

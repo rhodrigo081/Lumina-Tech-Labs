@@ -1,0 +1,15 @@
+import { inject } from '@angular/core';
+import { CanActivateFn, Router } from '@angular/router';
+import { AdminAuthService } from './admin-auth.service';
+
+/** Rotas internas exigem sessão de administrador. */
+export const adminGuard: CanActivateFn = (_route, state) => {
+  const auth = inject(AdminAuthService);
+  return auth.isAuthenticated() || inject(Router).createUrlTree(['/admin/login'], { queryParams: { redirect: state.url } });
+};
+
+/** Quem já está logado não precisa ver a tela de login. */
+export const adminLoginGuard: CanActivateFn = () => {
+  const auth = inject(AdminAuthService);
+  return !auth.isAuthenticated() || inject(Router).createUrlTree(['/admin/leads']);
+};

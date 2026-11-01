@@ -1,21 +1,51 @@
-import { Injectable, computed, signal } from '@angular/core';
-import { Booking, DiagnosticInput, Identification, LeadSummary, Report } from './models';
-import { DEFAULT_INPUT, DEFAULT_LEAD, calcDiagnostic } from './calc';
+import { Injectable, computed, effect, signal } from '@angular/core';
+import { BookingRecord, DiagnosticInput, Identification, LeadResponse } from './models';
+import { DEFAULT_INPUT } from './infrastructure';
 
-/** Estado da jornada (diagnóstico → relatório → agendamento). Defaults permitem abrir qualquer rota direto. */
+const KEY = 'ecm.session.v1';
+
+interface Persisted { input?: DiagnosticInput; client?: Identification | null; report?: LeadResponse | null; booking?: BookingRecord | null; }
+
+const isInput = (x: unknown): x is DiagnosticInput => {
+  const i = x as DiagnosticInput;
+  return !!i && typeof i.areaM2 === 'number' && typeof i.workstations === 'number' && typeof i.monthlyEnergyBill === 'number' && typeof i.currentInfrastructure === 'string';
+};
+
+function restore(): Persisted {
+  try { return JSON.parse(sessionStorage.getItem(KEY) ?? '{}') as Persisted; } catch { return {}; }
+}
+
+/**
+ * Estado da jornada (diagnóstico → relatório → agendamento → confirmação).
+ * Fica salvo no sessionStorage da aba: recarregar a página não perde o andamento (fechar a aba limpa tudo).
+ */
 @Injectable({ providedIn: 'root' })
 export class JourneyStore {
-  readonly input = signal<DiagnosticInput>(DEFAULT_INPUT);
-  readonly lead = signal<LeadSummary>(DEFAULT_LEAD);
-  readonly booking = signal<Booking | null>(null);
-  /** Última identificação preenchida: pré-preenche os próximos formulários (o cliente informa os dados uma vez só). */
-  readonly client = signal<Identification | null>(null);
-  /** Verdadeiro depois que o usuário clica em "Gerar relatório": é o único caminho de acesso à página de relatório. */
+  private readonly saved = restore();
+
+  readonly input = signal<DiagnosticInput>(isInput(this.saved.input) ? this.saved.input : DEFAULT_INPUT);
+  /** Última identificação preenchida: pré-preenche os próximos formulários. */
+  readonly client = signal<Identification | null>(this.saved.client ?? null);
+  /** Lead criado no backend, com o diagnóstico calculado. */
+  readonly report = signal<LeadResponse | null>(this.saved.report ?? null);
+  readonly booking = signal<BookingRecord | null>(this.saved.booking ?? null);
+  /** Verdadeiro depois do clique em "Gerar relatório" (libera a rota do relatório). */
   readonly reportRequested = signal(false);
-  readonly result = computed(() => calcDiagnostic(this.input()));
-  /** Último relatório carregado: evita nova consulta (e skeleton) quando o dado já está em memória. */
-  readonly report = signal<Report | null>(null);
-  setReport(r: Report) { this.report.set(r); this.lead.set(r.lead); this.input.set(r.input); }
+
+  /** Atalho de compatibilidade: identificação + id do lead. */
+  readonly lead = computed(() => ({
+    id: this.report()?.id ?? '',
+    name: this.client()?.name ?? this.report()?.fullName ?? '',
+    role: this.client()?.role ?? '', company: this.client()?.company ?? this.report()?.companyName ?? '',
+    phone: this.client()?.phone ?? '', email: this.client()?.email ?? this.report()?.corporateEmail ?? '',
+  }));
+
+  constructor() {
+    effect(() => {
+      const data: Persisted = { input: this.input(), client: this.client(), report: this.report(), booking: this.booking() };
+      try { sessionStorage.setItem(KEY, JSON.stringify(data)); } catch { /* storage indisponível */ }
+    });
+  }
 }
 
 /** Contador de requisições em andamento — alimenta a barra global de progresso. */

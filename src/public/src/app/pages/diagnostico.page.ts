@@ -2,11 +2,12 @@ import { CurrencyPipe, DecimalPipe } from '@angular/common';
 import { Component, computed, inject, signal } from '@angular/core';
 import { takeUntilDestroyed, toObservable } from '@angular/core/rxjs-interop';
 import { Router } from '@angular/router';
-import { catchError, debounceTime, of, skip, switchMap, tap } from 'rxjs';
+import { catchError, debounceTime, filter, map, of, switchMap, tap } from 'rxjs';
 import { ApiService } from '../core/api.service';
-import { INFRA_OPTIONS, calcDiagnostic } from '../core/calc';
-import { DiagnosticInput, DiagnosticResult } from '../core/models';
+import { INFRA_OPTIONS, isValidInput, validateInput } from '../core/infrastructure';
+import { ApiError, DiagnosticInput, DiagnosticResult } from '../core/models';
 import { JourneyStore } from '../core/state.services';
+import { friendly } from '../core/errors';
 import { fmtNum, parseCents } from '../core/utils';
 
 @Component({
@@ -54,10 +55,11 @@ import { fmtNum, parseCents } from '../core/utils';
               <span class="font-label-mono text-label-mono text-fg-secondary">Base Cadastral Mín: 200 m²</span>
             </div>
             <input id="input-area" type="text" inputmode="numeric" [value]="areaText()" (input)="onArea($event)"
-              class="w-full h-12 px-4 rounded-lg bg-surface-container-low text-fg-primary font-headline-sm font-semibold focus:bg-surface-container-lowest" />
+              class="w-full h-12 px-4 rounded-lg bg-surface-container-low text-fg-primary font-headline-sm font-semibold focus:bg-surface-container-lowest transition-all" />
             <input type="range" min="200" max="15000" step="50" [value]="input().areaM2" (input)="patch({ areaM2: +$any($event.target).value })"
               class="w-full accent-fg-primary cursor-pointer mt-1" aria-label="Ajustar área em metros quadrados" />
             <div class="flex justify-between text-fg-secondary font-label-mono text-label-mono px-1"><span>200 m²</span><span>7.500 m²</span><span>15.000+ m²</span></div>
+            @if (errors().area; as m) { <p class="font-body-sm text-body-sm text-fg-error" role="alert">{{ m }}</p> }
           </div>
 
           <div class="flex flex-col gap-1.5">
@@ -68,28 +70,28 @@ import { fmtNum, parseCents } from '../core/utils';
                 class="flex-1 h-12 px-4 text-center rounded-lg bg-surface-container-low text-fg-primary font-headline-sm font-semibold focus:bg-surface-container-lowest" />
               <button type="button" (click)="people(10)" aria-label="Aumentar 10 posições" class="w-12 h-12 rounded-lg bg-surface-container hover:bg-surface-container-high flex items-center justify-center text-fg-primary"><span class="material-symbols-outlined text-[20px]">add</span></button>
             </div>
-            <p class="font-body-sm text-body-sm text-fg-secondary">Considera densidade média de computação e iluminação por baia operacional.</p>
+            @if (errors().workstations; as m) { <p class="font-body-sm text-body-sm text-fg-error" role="alert">{{ m }}</p> }
+            @else { <p class="font-body-sm text-body-sm text-fg-secondary">Considera densidade média de computação e iluminação por baia operacional.</p> }
           </div>
 
           <div class="flex flex-col gap-1.5">
             <label for="input-bill" class="font-label-lg text-label-lg text-fg-primary font-semibold flex items-center gap-1.5"><span class="material-symbols-outlined text-[18px] text-fg-secondary" aria-hidden="true">receipt_long</span>Custo Médio Mensal com Energia Elétrica (Fatura Concessionária)</label>
             <div class="relative">
               <span class="absolute left-4 top-3 text-fg-secondary font-bold">R$</span>
-              <input id="input-bill" type="text" inputmode="numeric" [value]="billText()" (input)="onBill($event)"
+              <input id="input-bill" type="text" inputmode="numeric" [value]="billText()" (input)="onBill($event)" [attr.aria-invalid]="!!errors().bill"
                 class="w-full h-12 pl-12 pr-4 rounded-lg bg-surface-container-low text-fg-primary font-headline-sm font-semibold focus:bg-surface-container-lowest" />
             </div>
             <div class="flex items-center justify-between font-label-mono text-label-mono text-fg-secondary pt-0.5">
-              <span>Grupo Tarifário A4 / B3 Típico</span>
-              <span class="text-fg-tertiary font-bold flex items-center gap-1"><span class="material-symbols-outlined text-[14px]" aria-hidden="true">bolt</span>Tarifa Base Média: R$ 0,84 / kWh</span>
+              @if (errors().bill; as m) { <span class="text-fg-error font-body-sm" role="alert">{{ m }}</span> } @else { <span>Valor médio da fatura da concessionária</span> }
             </div>
           </div>
 
           <div class="flex flex-col gap-1.5">
             <label for="select-infra" class="font-label-lg text-label-lg text-fg-primary font-semibold flex items-center gap-1.5"><span class="material-symbols-outlined text-[18px] text-fg-secondary" aria-hidden="true">domain</span>Topologia da Infraestrutura Atual</label>
             <div class="relative">
-              <select id="select-infra" (change)="patch({ infraFactor: +$any($event.target).value })"
+              <select id="select-infra" (change)="patch({ currentInfrastructure: $any($event.target).value })"
                 class="w-full h-12 px-4 rounded-lg bg-surface-container-low text-fg-primary font-body-md font-semibold appearance-none cursor-pointer">
-                @for (o of infra; track o.value) { <option [value]="o.value" [selected]="o.value === input().infraFactor">{{ o.label }}</option> }
+                @for (o of infra; track o.code) { <option [value]="o.code" [selected]="o.code === input().currentInfrastructure">{{ o.label }}</option> }
               </select>
               <span class="absolute right-4 top-3.5 pointer-events-none text-fg-secondary material-symbols-outlined" aria-hidden="true">expand_more</span>
             </div>
@@ -104,6 +106,13 @@ import { fmtNum, parseCents } from '../core/utils';
         <!-- RESULTADO EM TEMPO REAL -->
         <div class="xl:col-span-5 flex flex-col gap-space-md">
           <div class="bg-surface-container-lowest rounded-xl shadow-xl p-space-lg" [attr.aria-busy]="previewing()" aria-live="polite">
+            @if (previewError(); as pe) {
+              <div class="mb-space-md p-space-sm rounded-lg bg-error-container text-on-error-container flex items-start gap-space-sm" role="alert">
+                <span class="material-symbols-outlined text-[20px] shrink-0" aria-hidden="true">cloud_off</span>
+                <div class="flex-1"><p class="font-label-lg text-label-lg font-bold">{{ pe.title }}</p><p class="font-body-sm text-body-sm">{{ result() ? 'Exibindo o último cálculo disponível. ' : '' }}{{ pe.message }}</p></div>
+                <button type="button" (click)="retryPreview()" class="px-3 h-9 rounded-lg bg-surface-container-lowest text-fg-primary font-label-md text-label-md font-bold shrink-0">Tentar de novo</button>
+              </div>
+            }
             <div class="flex items-center justify-between pb-space-md">
               <div>
                 <span class="font-label-mono text-label-mono text-fg-secondary uppercase tracking-wider block">Eficiência Potencial</span>
@@ -112,13 +121,13 @@ import { fmtNum, parseCents } from '../core/utils';
               <div class="flex flex-col items-end">
                 <div class="px-3 py-1.5 rounded-full bg-tertiary-fixed text-on-tertiary-fixed font-headline-sm font-bold flex items-center gap-1 shadow-sm min-w-[96px] justify-center">
                   <span class="material-symbols-outlined text-[18px]" aria-hidden="true">trending_down</span>
-                  @if (previewing()) { <span class="sk sk-sage h-5 w-12"></span> } @else { <span>{{ r().reductionPct | number: '1.2-2' }}%</span> }
+                  @if (previewing()) { <span class="sk sk-sage h-5 w-12"></span> } @else { <span>{{ r().consumptionReductionPct | number: '1.2-2' }}%</span> }
                 </div>
                 <span class="font-label-mono text-label-mono text-fg-secondary mt-1">Otimização Direta</span>
               </div>
             </div>
             <div class="w-full bg-surface-container rounded-full h-3 mb-space-md overflow-hidden">
-              @if (previewing()) { <div class="sk h-full w-full rounded-full"></div> } @else { <div class="bg-primary-container h-full rounded-full transition-all duration-700 ease-out" [style.width.%]="r().reductionPct"></div> }
+              @if (previewing()) { <div class="sk h-full w-full rounded-full"></div> } @else { <div class="bg-primary-container h-full rounded-full transition-all duration-700 ease-out" [style.width.%]="r().consumptionReductionPct"></div> }
             </div>
 
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-space-md py-space-xs">
@@ -128,7 +137,7 @@ import { fmtNum, parseCents } from '../core/utils';
                 <div class="mt-1 h-11 flex items-center">
                   @if (previewing()) { <div class="sk h-8 w-40"></div> } @else { <span class="font-metric-numeral text-[28px] leading-[44px] font-extrabold tracking-tight text-fg-primary">{{ r().annualSavings | currency: 'BRL' }}</span> }
                 </div>
-                @if (previewing()) { <span class="sk h-3.5 w-28 mt-1 block"></span> } @else { <span class="font-label-mono text-label-mono text-fg-tertiary font-semibold mt-1 inline-flex items-center gap-1"><span class="material-symbols-outlined text-[14px]" aria-hidden="true">savings</span>+{{ r().monthlySavings | currency: 'BRL' }} /mês</span> }
+                @if (previewing()) { <span class="sk h-3.5 w-28 mt-1 block"></span> } @else { <span class="font-label-mono text-label-mono text-fg-tertiary font-semibold mt-1 inline-flex items-center gap-1"><span class="material-symbols-outlined text-[14px]" aria-hidden="true">savings</span>+{{ monthly() | currency: 'BRL' }} /mês</span> }
               </div>
               <div class="p-space-md rounded-lg bg-surface-container-low relative pl-4">
                 <div class="absolute left-0 top-3 bottom-3 w-1.5 bg-secondary-fixed-dim rounded-r-full"></div>
@@ -145,28 +154,28 @@ import { fmtNum, parseCents } from '../core/utils';
                 <div class="w-10 h-10 rounded-full bg-tertiary-fixed flex items-center justify-center text-on-tertiary-fixed shrink-0"><span class="material-symbols-outlined text-[22px]" aria-hidden="true">nature</span></div>
                 <div>
                   <span class="font-label-md text-label-md text-fg-secondary block font-semibold">Mitigação de Carbono (GHG Escopo 2)</span>
-                  @if (previewing()) { <span class="sk h-7 w-36 block"></span> } @else { <span class="font-headline-sm text-headline-sm text-fg-primary font-bold">{{ r().co2Tons | number: '1.2-2' }} tCO₂e /ano</span> }
+                  @if (previewing()) { <span class="sk h-7 w-36 block"></span> } @else { <span class="font-headline-sm text-headline-sm text-fg-primary font-bold">{{ r().co2ReductionTons | number: '1.2-2' }} tCO₂e /ano</span> }
                 </div>
               </div>
-              @if (previewing()) { <span class="sk h-[22px] w-24 block shrink-0"></span> } @else { <span class="font-label-mono text-label-mono px-2.5 py-1 rounded bg-surface-container-lowest text-fg-primary font-bold shadow-sm shrink-0">≈ {{ r().trees }} árvores</span> }
+              
             </div>
 
             <div class="mt-space-md pt-space-sm">
               <div class="flex items-center justify-between mb-2"><span class="font-label-md text-label-md text-fg-primary font-bold">Benchmark de Custo Energético Anual</span><span class="font-label-mono text-label-mono text-fg-secondary">Projeção 12 Meses</span></div>
               <div class="flex flex-col gap-3 bg-surface-container-low p-space-md rounded-lg">
                 <div>
-                  <div class="flex justify-between text-body-sm font-semibold mb-1"><span class="text-fg-secondary flex items-center gap-1"><span class="w-2.5 h-2.5 rounded bg-outline"></span>Cenário Atual (Sem Gestão Ativa)</span>@if (previewing()) { <span class="sk h-[18px] w-24"></span> } @else { <span class="text-fg-primary font-bold">{{ r().annualCost | currency: 'BRL' }}</span> }</div>
+                  <div class="flex justify-between text-body-sm font-semibold mb-1"><span class="text-fg-secondary flex items-center gap-1"><span class="w-2.5 h-2.5 rounded bg-outline"></span>Cenário Atual (Sem Gestão Ativa)</span>@if (previewing()) { <span class="sk h-[18px] w-24"></span> } @else { <span class="text-fg-primary font-bold">{{ annualCost() | currency: 'BRL' }}</span> }</div>
                   <div class="w-full bg-surface-container rounded-full h-3 overflow-hidden"><div class="bg-outline h-full rounded-full w-full"></div></div>
                 </div>
                 <div>
-                  <div class="flex justify-between text-body-sm font-semibold mb-1"><span class="text-fg-tertiary flex items-center gap-1 font-bold"><span class="w-2.5 h-2.5 rounded bg-primary-container"></span>Com EcoMetric Intelligence</span>@if (previewing()) { <span class="sk h-[18px] w-24"></span> } @else { <span class="text-fg-primary font-bold">{{ r().optimizedCost | currency: 'BRL' }}</span> }</div>
-                  <div class="w-full bg-surface-container rounded-full h-3 overflow-hidden">@if (previewing()) { <div class="sk h-full w-full rounded-full"></div> } @else { <div class="bg-primary-container h-full rounded-full transition-all duration-700 ease-out" [style.width.%]="(r().optimizedCost / r().annualCost) * 100"></div> }</div>
+                  <div class="flex justify-between text-body-sm font-semibold mb-1"><span class="text-fg-tertiary flex items-center gap-1 font-bold"><span class="w-2.5 h-2.5 rounded bg-primary-container"></span>Com EcoMetric Intelligence</span>@if (previewing()) { <span class="sk h-[18px] w-24"></span> } @else { <span class="text-fg-primary font-bold">{{ optimizedCost() | currency: 'BRL' }}</span> }</div>
+                  <div class="w-full bg-surface-container rounded-full h-3 overflow-hidden">@if (previewing()) { <div class="sk h-full w-full rounded-full"></div> } @else { <div class="bg-primary-container h-full rounded-full transition-all duration-700 ease-out" [style.width.%]="optimizedPct()"></div> }</div>
                 </div>
               </div>
             </div>
 
             <div class="mt-space-lg pt-space-xs flex flex-col gap-2">
-              <button type="button" (click)="generate()" class="w-full h-14 rounded-lg bg-primary-container hover:bg-primary text-on-primary font-label-lg text-label-lg font-bold flex items-center justify-center gap-space-sm shadow-md active:scale-[0.99]">
+              <button type="button" (click)="generate()" [disabled]="!canGenerate()" class="w-full h-14 rounded-lg bg-primary-container hover:bg-primary text-on-primary font-label-lg text-label-lg font-bold flex items-center justify-center gap-space-sm shadow-md active:scale-[0.99] disabled:opacity-60 disabled:cursor-not-allowed">
                 <span class="material-symbols-outlined text-[20px]" aria-hidden="true">description</span><span>Gerar relatório</span>
               </button>
               <div class="flex items-center justify-center gap-space-sm text-fg-secondary font-label-mono text-label-mono flex-wrap"><span>Leva menos de 1 minuto</span><span>•</span><span>Sem custo imediato</span></div>
@@ -200,10 +209,24 @@ export class DiagnosticoPage {
   readonly infra = INFRA_OPTIONS;
 
   readonly input = signal<DiagnosticInput>(this.store.input());
-  readonly r = signal<DiagnosticResult>(calcDiagnostic(this.input()));
-  readonly previewing = signal(false);
+  /** Último cálculo devolvido pelo backend (POST /diagnostics/preview). */
+  readonly result = signal<DiagnosticResult | null>(null);
+  readonly loading = signal(false);
+  readonly error = signal<ApiError | null>(null);
+
+  readonly errors = computed(() => validateInput(this.input()));
+  readonly previewing = computed(() => this.loading() || (!this.result() && !this.error()));
+  readonly previewError = computed(() => { const e = this.error(); return e ? friendly(e, 'preview') : null; });
   readonly areaText = computed(() => fmtNum(this.input().areaM2) + ' m²');
-  readonly billText = computed(() => fmtNum(this.input().monthlyBill));
+  readonly billText = computed(() => fmtNum(this.input().monthlyEnergyBill));
+  readonly canGenerate = computed(() => !!this.result() && !this.loading() && !this.error() && isValidInput(this.input()));
+
+  /** Valores zerados só servem de apoio ao template enquanto o skeleton aparece. */
+  readonly r = computed<DiagnosticResult>(() => this.result() ?? { ...this.input(), consumptionReductionPct: 0, annualSavings: 0, paybackMonths: 0, co2ReductionTons: 0, calculatedAt: '' });
+  readonly monthly = computed(() => this.r().annualSavings / 12);
+  readonly annualCost = computed(() => this.r().monthlyEnergyBill * 12);
+  readonly optimizedCost = computed(() => this.annualCost() - this.r().annualSavings);
+  readonly optimizedPct = computed(() => (this.annualCost() > 0 ? Math.min(100, Math.max(0, (this.optimizedCost() / this.annualCost()) * 100)) : 100));
 
   readonly trust = [
     { icon: 'policy', label: 'Conformidade ANEEL' }, { icon: 'eco', label: 'Metodologia GHG Protocol' },
@@ -216,25 +239,31 @@ export class DiagnosticoPage {
   ];
 
   constructor() {
-    // Preview em tempo real: debounce de 300ms; skeleton enquanto aguarda; fallback local se a API falhar.
+    // Estimativa em tempo real: só consulta com parâmetros válidos, com debounce de 300 ms e cancelando consultas antigas.
     toObservable(this.input).pipe(
-      skip(1),
-      tap(() => this.previewing.set(true)),
+      filter((i) => isValidInput(i)),
+      tap(() => { this.loading.set(true); this.error.set(null); }),
       debounceTime(300),
-      switchMap((i) => this.api.preview(i).pipe(catchError(() => of(calcDiagnostic(i))))),
+      switchMap((i) => this.api.preview(i).pipe(map((r) => ({ r })), catchError((e: ApiError) => of({ e })))),
       takeUntilDestroyed(),
-    ).subscribe((res) => { this.r.set(res); this.previewing.set(false); });
+    ).subscribe((x) => {
+      this.loading.set(false);
+      if ('r' in x) this.result.set(x.r); else this.error.set(x.e);
+    });
   }
+
+  retryPreview() { this.input.update((v) => ({ ...v })); }
 
   patch(p: Partial<DiagnosticInput>) { this.input.update((v) => ({ ...v, ...p })); this.store.input.set(this.input()); }
   people(d: number) { this.patch({ workstations: Math.max(5, this.input().workstations + d) }); }
   onArea(e: Event) { const el = e.target as HTMLInputElement; const n = parseCents(el.value); el.value = fmtNum(n) + ' m²'; this.patch({ areaM2: n }); }
-  onBill(e: Event) { const el = e.target as HTMLInputElement; const n = parseCents(el.value); el.value = fmtNum(n); this.patch({ monthlyBill: n }); }
+  onBill(e: Event) { const el = e.target as HTMLInputElement; const n = parseCents(el.value); el.value = fmtNum(n); this.patch({ monthlyEnergyBill: n }); }
 
   /** Único ponto de entrada da página de relatório: libera o acesso e segue para o formulário de geração. */
   generate() {
+    if (!this.canGenerate()) return;
     this.store.input.set(this.input());
-    this.store.report.set(null);
+    this.store.report.set(null); // novo diagnóstico = novo lead
     this.store.reportRequested.set(true);
     this.router.navigate(['/relatorio']);
   }

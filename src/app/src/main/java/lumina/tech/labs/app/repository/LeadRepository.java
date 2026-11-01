@@ -5,13 +5,33 @@ import lumina.tech.labs.app.enums.Priority;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.EntityGraph;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
-public interface LeadRepository extends JpaRepository<Lead, UUID> {
+public interface LeadRepository extends JpaRepository<Lead, UUID>, JpaSpecificationExecutor<Lead> {
+
+    /**
+     * Admin listing. The fetch graph avoids N+1: the inverse-side @OneToOne
+     * associations (diagnostic, schedule) cannot really be lazy without
+     * bytecode enhancement, so without this each row triggered extra queries.
+     */
+    @Override
+    @EntityGraph(attributePaths = {"company", "diagnostic", "schedule", "schedule.technician"})
+    Page<Lead> findAll(Specification<Lead> spec, Pageable pageable);
+
+    /** Admin detail page: everything except the 1:N logs (loaded separately). */
+    @EntityGraph(attributePaths = {"company", "diagnostic", "schedule", "schedule.technician"})
+    Optional<Lead> findDetailedById(UUID id);
+
+    long countByCreatedAtAfter(Instant after);
+
+    long countByPriority(Priority priority);
 
     /** Deduplication check before inserting a new Lead (unique constraint on corporate_email). */
     Optional<Lead> findByCorporateEmail(String corporateEmail);

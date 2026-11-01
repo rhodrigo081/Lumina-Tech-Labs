@@ -124,3 +124,18 @@ body { overscroll-behavior: none; }
 
 @media (prefers-reduced-motion: reduce) { .sk, .loader-bar { animation: none; } }
 @media print { [data-chrome], .no-print { display: none !important; } main { padding: 0 !important; } }
+
+/* ===== Área administrativa: componentes reutilizáveis (mesmos tokens do design system) ===== */
+@layer components {
+  .adm-card { @apply bg-surface-container-lowest rounded-xl p-space-lg shadow-sm; }
+  .adm-label { @apply font-label-lg text-label-lg text-fg-primary font-semibold; }
+  .adm-input { @apply w-full h-11 px-3.5 rounded-lg bg-surface-container-low text-on-surface font-body-md text-body-md placeholder:text-on-surface-variant/70 focus:bg-surface-container-lowest transition-colors; }
+  .adm-input[aria-invalid='true'] { @apply ring-2 ring-error; }
+  .adm-btn { @apply inline-flex items-center justify-center gap-space-xs h-10 px-space-md rounded-lg font-label-lg text-label-lg transition-colors disabled:opacity-60 disabled:cursor-not-allowed; }
+  .adm-btn-primary { @apply adm-btn bg-primary-container text-on-primary hover:bg-primary; }
+  .adm-btn-ghost { @apply adm-btn bg-surface-container-low text-fg-primary hover:bg-surface-container; }
+  .adm-btn-danger { @apply adm-btn bg-error-container text-on-error-container hover:opacity-90; }
+  .adm-chip { @apply inline-flex items-center gap-1 px-2 py-0.5 rounded font-label-mono text-label-mono whitespace-nowrap; }
+  .adm-th { @apply text-left font-label-mono text-label-mono text-on-surface-variant uppercase tracking-wider px-space-sm py-space-sm; }
+  .adm-td { @apply px-space-sm py-space-sm font-body-sm text-body-sm text-on-surface align-middle; }
+}

@@ -2,6 +2,7 @@ import { Component, computed, inject, signal } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { ApiService } from '../core/api.service';
+import { FriendlyError, friendly } from '../core/errors';
 import { ApiError } from '../core/models';
 import { JourneyStore, ToastService } from '../core/state.services';
 import { maskPhone, uuid, whatsappUrl } from '../core/utils';
@@ -22,11 +23,11 @@ type Field = 'name' | 'email' | 'phone' | 'company' | 'subject' | 'message';
 
       <div class="grid grid-cols-1 xl:grid-cols-12 gap-space-lg items-start">
         <section class="xl:col-span-7 bg-surface-container-lowest rounded-2xl shadow-md p-space-lg flex flex-col gap-space-md" aria-labelledby="form-h">
-          @if (sent(); as protocol) {
+          @if (sent(); as done) {
             <div class="p-space-lg rounded-xl bg-tertiary-fixed/30 text-center flex flex-col gap-space-sm" role="status">
               <div class="w-16 h-16 rounded-full bg-tertiary-fixed text-on-tertiary-fixed flex items-center justify-center mx-auto shadow-sm"><span class="material-symbols-outlined text-[36px]" aria-hidden="true">mark_email_read</span></div>
               <h2 id="form-h" class="font-headline-sm text-headline-sm text-fg-primary font-bold">Mensagem enviada com sucesso!</h2>
-              <p class="font-body-md text-body-md text-fg-secondary max-w-md mx-auto">Recebemos o seu contato e a nossa equipe retornará em breve. Protocolo: <strong class="text-fg-primary">#{{ protocol }}</strong></p>
+              <p class="font-body-md text-body-md text-fg-secondary max-w-md mx-auto">Recebemos o seu contato e a nossa equipe retornará em breve.@if (done.protocol) { Protocolo: <strong class="text-fg-primary">#{{ done.protocol }}</strong> }</p>
               <button type="button" (click)="reset()" class="mx-auto px-5 py-2.5 rounded-lg bg-primary-container text-on-primary font-label-lg text-label-lg font-bold hover:bg-primary inline-flex items-center gap-2"><span class="material-symbols-outlined text-[18px]" aria-hidden="true">edit_note</span>Enviar nova mensagem</button>
             </div>
           } @else {
@@ -56,6 +57,14 @@ type Field = 'name' | 'email' | 'phone' | 'company' | 'subject' | 'message';
                   <span class="font-label-mono text-label-mono text-on-surface-variant">{{ form.controls.message.value.length }}/1000</span></div>
                 <textarea id="c-message" formControlName="message" rows="6" maxlength="1000" placeholder="Descreva sua necessidade com o máximo de detalhes possível" class="w-full px-4 py-3 rounded-lg bg-surface-container-low text-fg-primary resize-y" [attr.aria-invalid]="!!err('message')" [attr.aria-describedby]="err('message') ? 'e-message' : null"></textarea>
                 @if (err('message'); as m) { <p id="e-message" class="font-body-sm text-body-sm text-fg-error" role="alert">{{ m }}</p> }</div>
+              @if (submitError(); as se) {
+                <div class="p-space-sm rounded-lg bg-error-container text-on-error-container flex items-start gap-space-sm" role="alert">
+                  <span class="material-symbols-outlined text-[20px] shrink-0" aria-hidden="true">error</span>
+                  <div class="flex-1"><p class="font-label-lg text-label-lg font-bold">{{ se.title }}</p><p class="font-body-sm text-body-sm">{{ se.message }}</p>
+                    @if (se.details) { <ul class="list-disc pl-5 font-body-sm text-body-sm">@for (d of se.details; track d) { <li>{{ d }}</li> }</ul> }
+                    <a [href]="waUrl()" target="_blank" rel="noopener noreferrer" class="inline-block mt-1 font-label-md text-label-md font-bold underline">Chamar no WhatsApp</a></div>
+                </div>
+              }
               <ecm-loading-button type="submit" label="Enviar mensagem" icon="send" loadingLabel="Enviando mensagem..." [loading]="submitting()" />
             </form>
           }
@@ -96,7 +105,8 @@ export class ContatoPage {
   });
   private readonly store = inject(JourneyStore);
   readonly submitting = signal(false);
-  readonly sent = signal<string | null>(null);
+  readonly sent = signal<{ protocol?: string } | null>(null);
+  readonly submitError = signal<FriendlyError | null>(null);
   private key = uuid();
 
   private readonly value = toSignal(this.form.valueChanges, { initialValue: this.form.getRawValue() });
@@ -135,12 +145,14 @@ export class ContatoPage {
       if (first) document.getElementById('c-' + first)?.focus();
       return;
     }
+    if (this.submitting()) return;
     this.submitting.set(true);
+    this.submitError.set(null);
     this.api.sendContact(this.form.getRawValue(), this.key).subscribe({
-      next: (r) => { this.submitting.set(false); this.sent.set(r.protocol); this.toast.show('Mensagem enviada', 'Nossa equipe entrará em contato em breve.'); },
-      error: (e: ApiError) => { this.submitting.set(false); if (e.status < 500) this.toast.show('Não foi possível enviar', e.message, 'error'); },
+      next: (r) => { this.submitting.set(false); this.sent.set({ protocol: r?.protocol }); this.toast.show('Mensagem enviada', 'Nossa equipe entrará em contato em breve.'); },
+      error: (e: ApiError) => { this.submitting.set(false); this.submitError.set(friendly(e, 'contact')); if (e.status >= 400 && e.status < 500) this.key = uuid(); },
     });
   }
 
-  reset() { this.form.reset(); this.sent.set(null); this.key = uuid(); }
+  reset() { this.form.reset(); this.sent.set(null); this.submitError.set(null); this.key = uuid(); }
 }

@@ -1,10 +1,13 @@
 package lumina.tech.labs.app.repository;
 
-import lumina.tech.labs.app.model.Schedule;
 import lumina.tech.labs.app.enums.ScheduleStatus;
+import lumina.tech.labs.app.model.Schedule;
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
+import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -15,15 +18,12 @@ public interface ScheduleRepository extends JpaRepository<Schedule, UUID> {
 
     boolean existsByLeadId(UUID leadId);
 
-    /**
-     * Application-level safety net against double booking (FR02.2), on top
-     * of the optimistic lock performed against Google Calendar/Outlook
-     * itself: checks whether the given consultant already has a non-cancelled
-     * meeting exactly at that time before attempting the external booking.
-     */
-    boolean existsBySdrAssignedAndMeetingTimeAndStatusNot(
-            String sdrAssigned,
-            LocalDateTime meetingTime,
-            ScheduleStatus status
-    );
+    @EntityGraph(attributePaths = {"lead", "technician", "slot"})
+    Optional<Schedule> findDetailedById(UUID id);
+
+    /** Admin agenda: who booked each slot shown on screen. */
+    @EntityGraph(attributePaths = {"lead", "lead.company"})
+    List<Schedule> findBySlotIdInAndStatusNot(Collection<UUID> slotIds, ScheduleStatus status);
+
+    long countByStatusAndMeetingTimeAfter(ScheduleStatus status, Instant after);
 }

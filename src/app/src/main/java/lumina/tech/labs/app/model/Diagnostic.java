@@ -5,7 +5,7 @@ import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
 
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.UUID;
 
 /**
@@ -54,7 +54,7 @@ public class Diagnostic {
     @Column(name = "annual_savings", precision = 12, scale = 2)
     private BigDecimal annualSavings;
 
-    @Column(name = "payback_months", precision = 6, scale = 2)
+    @Column(name = "payback_months", precision = 12, scale = 2)
     private BigDecimal paybackMonths;
 
     @Column(name = "co2_reduction_tons", precision = 10, scale = 2)
@@ -62,11 +62,7 @@ public class Diagnostic {
 
     @CreationTimestamp
     @Column(name = "calculated_at", updatable = false)
-    private LocalDateTime calculatedAt;
+    private Instant calculatedAt;
 
-    @PrePersist
-    private void prePersist(){
-        this.calculatedAt = LocalDateTime.now();
-    }
 
 }

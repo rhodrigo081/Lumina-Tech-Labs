@@ -2,7 +2,7 @@ package lumina.tech.labs.app.dto.response;
 
 import lumina.tech.labs.app.enums.Priority;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.UUID;
 
 /**
@@ -17,7 +17,7 @@ public record LeadResponse(
         String corporateEmail,
         String companyName,
         Priority priority,
-        LocalDateTime createdAt,
+        Instant createdAt,
         DiagnosticResponse diagnostic,
         String reportUrl
 ) {

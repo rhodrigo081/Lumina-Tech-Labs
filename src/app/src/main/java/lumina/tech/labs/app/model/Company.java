@@ -4,7 +4,7 @@ import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -18,8 +18,8 @@ import java.util.UUID;
  * that must survive independently of the company record).
  */
 @Entity
-@Table(name = "company", uniqueConstraints = {
-        @UniqueConstraint(name = "uk_company_email_domain", columnNames = "email_domain")
+@Table(name = "company", indexes = {
+        @Index(name = "idx_company_email_domain", columnList = "email_domain")
 })
 @Getter
 @Setter
@@ -38,15 +38,16 @@ public class Company {
     private String name;
 
     /**
-     * Used to (a) group leads from the same company and (b) block
-     * generic domains (gmail.com, hotmail.com) at validation time.
+     * Groups leads from the same corporate domain. Not unique: leads using a
+     * personal provider (gmail.com, hotmail.com...) each get their own Company,
+     * since the domain says nothing about who they work for.
      */
-    @Column(name = "email_domain", nullable = false, unique = true, length = 255)
+    @Column(name = "email_domain", nullable = false, length = 255)
     private String emailDomain;
 
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)
-    private LocalDateTime createdAt;
+    private Instant createdAt;
 
     @OneToMany(mappedBy = "company", cascade = CascadeType.ALL, orphanRemoval = false, fetch = FetchType.LAZY)
     @Builder.Default
@@ -59,9 +60,5 @@ public class Company {
         lead.setCompany(this);
     }
 
-    @PrePersist
-    private void prePersist(){
-        this.createdAt = LocalDateTime.now();
-    }
 
 }

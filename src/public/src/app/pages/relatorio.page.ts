@@ -1,21 +1,24 @@
 import { CurrencyPipe, DecimalPipe } from '@angular/common';
-import { Component, OnInit, computed, inject, signal, viewChild } from '@angular/core';
+import { Component, computed, inject, signal, viewChild } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { ApiService } from '../core/api.service';
-import { ApiError, Report } from '../core/models';
+import { TERMS_VERSION } from '../core/config';
+import { dateTimeOf } from '../core/datetime';
+import { FriendlyError, friendly } from '../core/errors';
+import { ApiError, LeadRequest } from '../core/models';
 import { JourneyStore, ToastService } from '../core/state.services';
+import { ReportSection, parseReportText } from '../core/report-text';
 import { uuid, whatsappUrl } from '../core/utils';
-import { ErrorCardComponent } from '../shared/error-card.component';
 import { IdentificationFormComponent, buildIdentificationGroup } from '../shared/identification-form.component';
 import { LoadingButtonComponent } from '../shared/loading-button.component';
 
 @Component({
   selector: 'ecm-relatorio',
-  imports: [ReactiveFormsModule, RouterLink, CurrencyPipe, DecimalPipe, ErrorCardComponent, LoadingButtonComponent, IdentificationFormComponent],
+  imports: [ReactiveFormsModule, RouterLink, CurrencyPipe, DecimalPipe, LoadingButtonComponent, IdentificationFormComponent],
   template: `
-    @if (!id()) {
+    @if (!report()) {
       <!-- ETAPA 1: formulário de geração do relatório -->
       <div class="max-w-[1280px] w-full mx-auto px-gutter py-space-xl flex flex-col gap-space-lg">
         <header class="max-w-3xl flex flex-col gap-space-xs">
@@ -39,7 +42,7 @@ import { LoadingButtonComponent } from '../shared/loading-button.component';
               <div class="grid grid-cols-3 gap-space-sm text-on-primary">
                 <div><span class="font-label-mono text-[10px] text-primary-fixed-dim uppercase block">Área</span><span class="font-label-lg text-label-lg font-bold">{{ store.input().areaM2 | number: '1.0-0' }} m²</span></div>
                 <div><span class="font-label-mono text-[10px] text-primary-fixed-dim uppercase block">Estações</span><span class="font-label-lg text-label-lg font-bold">{{ store.input().workstations }}</span></div>
-                <div><span class="font-label-mono text-[10px] text-primary-fixed-dim uppercase block">Fatura/mês</span><span class="font-label-lg text-label-lg font-bold">{{ store.input().monthlyBill | currency: 'BRL' : 'symbol' : '1.0-0' }}</span></div>
+                <div><span class="font-label-mono text-[10px] text-primary-fixed-dim uppercase block">Fatura/mês</span><span class="font-label-lg text-label-lg font-bold">{{ store.input().monthlyEnergyBill | currency: 'BRL' : 'symbol' : '1.0-0' }}</span></div>
               </div>
             </div>
           </div>
@@ -50,238 +53,259 @@ import { LoadingButtonComponent } from '../shared/loading-button.component';
               <p class="font-body-sm text-body-sm text-fg-secondary">Insira suas informações profissionais para liberação do acesso e envio da versão PDF assinada digitalmente.</p>
             </div>
             <form [formGroup]="form" (ngSubmit)="submit()" class="flex flex-col gap-space-md" novalidate>
-              <ecm-identification-form [group]="form.controls.client" prefix="lead" nameLabel="Nome completo" [corporateEmail]="true" [serverError]="serverError()" />
+              <ecm-identification-form [group]="form.controls.client" prefix="lead" nameLabel="Nome completo" [serverError]="serverError()" />
               <div class="flex flex-col gap-1">
                 <label class="flex items-start gap-3 cursor-pointer">
                   <input type="checkbox" formControlName="terms" class="mt-1 w-5 h-5 rounded accent-fg-primary shrink-0" />
-                  <span class="font-body-sm text-body-sm text-fg-secondary">Li e concordo com os <strong class="text-fg-primary">Termos de Uso (v1.0)</strong> e a <strong class="text-fg-primary">Política de Privacidade LGPD</strong>. Autorizo o processamento para fins estritos deste diagnóstico energético.</span>
+                  <span class="font-body-sm text-body-sm text-fg-secondary">Li e concordo com os <strong class="text-fg-primary">Termos de Uso (v1.0)</strong> e a <strong class="text-fg-primary">Política de Privacidade LGPD</strong>. Autorizo o tratamento dos meus dados para fins deste diagnóstico energético.</span>
                 </label>
                 @if (form.controls.terms.touched && form.controls.terms.invalid) { <p class="font-body-sm text-body-sm text-fg-error" role="alert">Aceite os termos para continuar.</p> }
               </div>
+              @if (submitError(); as se) {
+                <div class="p-space-sm rounded-lg bg-error-container text-on-error-container flex items-start gap-space-sm" role="alert">
+                  <span class="material-symbols-outlined text-[20px] shrink-0" aria-hidden="true">error</span>
+                  <div class="flex-1">
+                    <p class="font-label-lg text-label-lg font-bold">{{ se.title }}</p>
+                    <p class="font-body-sm text-body-sm">{{ se.message }}</p>
+                    @if (se.details) { <ul class="list-disc pl-5 font-body-sm text-body-sm">@for (d of se.details; track d) { <li>{{ d }}</li> }</ul> }
+                    @if (duplicate()) { <a routerLink="/contato" class="inline-block mt-1 font-label-md text-label-md font-bold underline">Falar com a nossa equipe</a> }
+                  </div>
+                </div>
+              }
               <div class="flex flex-col gap-2 pt-space-sm">
                 <ecm-loading-button type="submit" label="Gerar relatório" icon="description" loadingLabel="Gerando relatório..." [loading]="submitting()" />
-                <div class="flex items-center justify-between text-fg-secondary font-label-mono text-label-mono px-1 flex-wrap gap-1"><span class="flex items-center gap-1"><span class="material-symbols-outlined text-[13px]" aria-hidden="true">key</span>Idempotency-Key Protegida</span><span>Criptografia TLS 1.3 / 256-bit</span></div>
+                <p class="font-label-mono text-label-mono text-fg-secondary px-1 flex items-center gap-1"><span class="material-symbols-outlined text-[13px]" aria-hidden="true">shield</span>Seus dados são usados apenas para gerar o diagnóstico, conforme a LGPD.</p>
               </div>
             </form>
           </div>
         </section>
       </div>
-    } @else if (error()) {
-      @let e = error()!;
-      <div class="max-w-[720px] mx-auto px-gutter py-space-xl">
-        <ecm-error-card [badge]="'HTTP ' + e.status" [code]="e.traceId ? 'TRACE: ' + e.traceId : e.code" [icon]="e.status === 404 ? 'find_in_page' : 'cloud_off'" [tone]="e.status === 404 ? 'neutral' : 'error'"
-          [title]="e.status === 404 ? 'Sessão de diagnóstico não localizada ou expirada' : 'Não foi possível carregar o relatório'"
-          [message]="e.status === 404 ? 'O identificador deste laudo expirou ou não existe na base vigente. Nenhum dado financeiro sensível foi comprometido.' : 'Tentamos reconectar automaticamente sem sucesso. Seus dados foram mantidos.'">
-          <ng-container actions>
-            <button type="button" (click)="fetchReport()" class="px-space-md h-10 rounded-lg bg-secondary-container text-on-secondary-container font-label-lg text-label-lg hover:bg-secondary-fixed">Tentar novamente</button>
-            <a routerLink="/diagnostico" class="px-space-md h-10 rounded-lg bg-primary-container text-on-primary font-label-lg text-label-lg hover:bg-primary inline-flex items-center gap-space-xs"><span class="material-symbols-outlined text-[18px]" aria-hidden="true">refresh</span>Iniciar Novo Diagnóstico</a>
-          </ng-container>
-        </ecm-error-card>
-      </div>
     } @else {
-      <section class="w-full bg-surface-container-lowest shadow-sm" [attr.aria-busy]="!rep()">
+      @let d = report()!.diagnostic;
+      <section class="w-full bg-surface-container-lowest shadow-sm">
         <div class="max-w-[1280px] mx-auto px-gutter py-space-md">
-          <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-space-md">
+          <div class="flex flex-col xl:flex-row xl:items-center xl:justify-between gap-space-md">
             <div class="flex flex-col gap-1 min-w-0">
-              <span class="font-label-mono text-label-mono text-fg-primary font-bold uppercase tracking-wider">Relatório Oficial #{{ id() }}</span>
+              <span class="font-label-mono text-label-mono text-fg-primary font-bold uppercase tracking-wider">Relatório Oficial #{{ shortId() }}</span>
               <div class="flex flex-wrap items-center gap-x-space-md gap-y-1">
                 <h1 class="font-headline-md text-headline-md text-fg-primary">Relatório de Auditoria Energética</h1>
-                @if (rep(); as d) { <span class="font-label-lg text-label-lg text-fg-secondary">{{ d.lead.company }}</span> } @else { <span class="sk h-5 w-48"></span> }
+                <span class="font-label-lg text-label-lg text-fg-secondary">{{ report()!.companyName }}</span>
               </div>
             </div>
             <div class="flex flex-wrap items-center gap-space-sm shrink-0 no-print">
-              <span class="hidden xl:inline-flex items-center gap-1 px-space-sm py-1 rounded bg-tertiary-fixed text-on-tertiary-fixed-variant font-label-mono text-label-mono"><span class="material-symbols-outlined text-[14px]" aria-hidden="true">verified</span>IPMVP Aprovado</span>
-              <span class="hidden xl:inline-flex items-center gap-1 px-space-sm py-1 rounded bg-secondary-container text-on-secondary-container font-label-mono text-label-mono"><span class="material-symbols-outlined text-[14px]" aria-hidden="true">bolt</span>ANEEL 2026</span>
-              <button type="button" (click)="print()" [disabled]="!rep()" class="inline-flex items-center gap-space-xs px-space-md h-12 rounded-lg bg-primary-container hover:bg-primary text-on-primary font-label-lg text-label-lg shadow-sm disabled:opacity-60 disabled:cursor-not-allowed">
+              <button type="button" (click)="print()" class="inline-flex items-center gap-space-xs px-space-md h-12 rounded-lg bg-primary-container hover:bg-primary text-on-primary font-label-lg text-label-lg shadow-sm">
                 <span class="material-symbols-outlined text-[18px]" aria-hidden="true">picture_as_pdf</span>Salvar como PDF
               </button>
             </div>
           </div>
-          <div class="mt-space-md bg-surface-container-low rounded-xl px-space-md py-space-sm flex flex-wrap items-center gap-x-space-lg gap-y-1 text-on-surface-variant font-body-sm text-body-sm min-h-[40px]">
-            @if (rep(); as d) {
-              <span>Planta Operacional: <strong class="text-on-surface font-semibold">{{ d.input.areaM2 | number: '1.2-2' }} m²</strong></span>
-              <span>Tarifa Vigente: <strong class="text-on-surface font-semibold">R$ 0,84 / kWh</strong> (Bandeira Neutra)</span>
-              <span>Dados Auditados: <strong class="text-on-surface font-semibold">API Telemetria v1.3</strong></span>
-            } @else { <span class="sk h-4 w-44"></span><span class="sk h-4 w-56"></span><span class="sk h-4 w-48"></span> }
+          <div class="mt-space-md bg-surface-container-low rounded-xl px-space-md py-space-sm flex flex-wrap items-center gap-x-space-lg gap-y-1 text-on-surface-variant font-body-sm text-body-sm">
+            <span>Planta operacional: <strong class="text-on-surface font-semibold">{{ d.areaM2 | number: '1.2-2' }} m²</strong></span>
+            <span>Estações de trabalho: <strong class="text-on-surface font-semibold">{{ d.workstations }}</strong></span>
+            <span>Fatura mensal informada: <strong class="text-on-surface font-semibold">{{ d.monthlyEnergyBill | currency: 'BRL' }}</strong></span>
+            @if (d.calculatedAt) { <span>Calculado em: <strong class="text-on-surface font-semibold">{{ dateTime(d.calculatedAt) }}</strong></span> }
           </div>
         </div>
       </section>
 
       <div class="max-w-[1280px] mx-auto px-gutter py-space-xl flex flex-col gap-space-xl w-full">
-        <!-- KPIs -->
-        <section class="flex flex-col gap-space-md" aria-labelledby="kpi-h" [attr.aria-busy]="!rep()">
+        <section class="flex flex-col gap-space-md" aria-labelledby="kpi-h">
           <div><span class="font-label-mono text-label-mono text-fg-secondary uppercase tracking-widest">Painel Executivo</span>
             <h2 id="kpi-h" class="font-headline-lg text-headline-lg text-fg-primary tracking-tight">Indicadores de Desempenho e Impacto Financeiro</h2></div>
-          @if (rep(); as d) {
-            <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-space-md">
-              <div class="bg-surface-container-lowest p-space-lg rounded-xl shadow-sm relative overflow-hidden flex flex-col justify-between gap-space-md min-h-[168px]">
-                <div class="absolute top-0 left-0 w-1.5 h-full bg-primary-container"></div>
-                <span class="font-label-md text-label-md text-on-surface-variant uppercase tracking-wider">Redução Projetada</span>
-                <div><span class="font-metric-numeral text-metric-numeral text-fg-primary">{{ d.result.reductionPct | number: '1.2-2' }}%</span>
-                  <p class="font-body-sm text-body-sm text-on-surface-variant mt-1">Eficiência agregada sem perda de vazão produtiva</p></div>
-              </div>
-              <div class="bg-surface-container-lowest p-space-lg rounded-xl shadow-sm relative overflow-hidden flex flex-col justify-between gap-space-md min-h-[168px]">
-                <div class="absolute top-0 left-0 w-1.5 h-full bg-primary"></div>
-                <span class="font-label-md text-label-md text-on-surface-variant uppercase tracking-wider">Economia Anual</span>
-                <div><span class="font-metric-numeral text-[30px] leading-[44px] font-extrabold tracking-tight text-fg-primary">{{ d.result.annualSavings | currency: 'BRL' }}</span>
-                  <p class="font-body-sm text-body-sm text-fg-secondary mt-1">Impacto direto no Ebitda: <strong class="text-fg-primary font-semibold">{{ d.result.monthlySavings | currency: 'BRL' }}/mês</strong></p></div>
-              </div>
-              <div class="bg-surface-container-lowest p-space-lg rounded-xl shadow-sm relative overflow-hidden flex flex-col justify-between gap-space-md min-h-[168px]">
-                <div class="absolute top-0 left-0 w-1.5 h-full bg-secondary-fixed-dim"></div>
-                <span class="font-label-md text-label-md text-on-surface-variant uppercase tracking-wider">Payback Estimado</span>
-                <div><span class="font-metric-numeral text-metric-numeral text-fg-primary">{{ d.result.paybackMonths | number: '1.1-1' }}</span> <span class="font-headline-md text-headline-md text-fg-secondary">meses</span>
-                  <p class="font-body-sm text-body-sm text-on-surface-variant mt-1">Ponto de equilíbrio no mês {{ d.result.paybackMonths | number: '1.0-0' }}</p></div>
-              </div>
-              <div class="bg-tertiary-fixed/30 p-space-lg rounded-xl shadow-sm relative overflow-hidden flex flex-col justify-between gap-space-md min-h-[168px]">
-                <div class="absolute top-0 left-0 w-1.5 h-full bg-tertiary-container"></div>
-                <span class="font-label-md text-label-md text-fg-tertiary font-bold uppercase tracking-wider">Descarbonização</span>
-                <div><span class="font-metric-numeral text-metric-numeral text-fg-tertiary">{{ d.result.co2Tons | number: '1.2-2' }}</span> <span class="font-label-lg text-label-lg text-on-tertiary-fixed-variant font-semibold">tCO2e/ano</span>
-                  <p class="font-body-sm text-body-sm text-on-tertiary-fixed-variant mt-1">Equivalente ao plantio de <strong>{{ d.result.trees }} árvores nativas</strong></p></div>
-              </div>
+          <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-space-md">
+            <div class="bg-surface-container-lowest p-space-lg rounded-xl shadow-sm relative overflow-hidden flex flex-col justify-between gap-space-md min-h-[168px]">
+              <div class="absolute top-0 left-0 w-1.5 h-full bg-primary-container"></div>
+              <span class="font-label-md text-label-md text-on-surface-variant uppercase tracking-wider">Redução Projetada</span>
+              <div><span class="font-metric-numeral text-metric-numeral text-fg-primary">{{ d.consumptionReductionPct | number: '1.2-2' }}%</span>
+                <p class="font-body-sm text-body-sm text-on-surface-variant mt-1">Redução estimada no consumo de energia</p></div>
             </div>
-            <div class="bg-surface-container-low rounded-2xl p-space-lg grid grid-cols-1 md:grid-cols-3 gap-space-lg items-center">
-              <div><span class="font-label-mono text-label-mono text-on-surface-variant uppercase tracking-wider">Cenário Base (Sem Gestão)</span>
-                <div class="font-metric-numeral-sm text-metric-numeral-sm text-on-surface mt-1">{{ d.result.annualCost | currency: 'BRL' }}</div>
-                <span class="font-body-sm text-body-sm text-on-surface-variant">Consumo contínuo de {{ d.kwhBase | number: '1.0-0' }} kWh/mês</span></div>
-              <div><span class="font-label-mono text-label-mono text-fg-tertiary font-bold uppercase tracking-wider">Com EcoMetric Intelligence</span>
-                <div class="font-metric-numeral-sm text-metric-numeral-sm text-fg-primary mt-1">{{ d.result.optimizedCost | currency: 'BRL' }}</div>
-                <span class="font-body-sm text-body-sm text-fg-secondary">Novo patamar auditado: {{ d.kwhOptimized | number: '1.0-0' }} kWh/mês</span></div>
-              <div class="bg-surface-container-lowest p-space-md rounded-xl flex flex-col justify-center"><span class="font-label-mono text-label-mono text-on-surface-variant uppercase">Margem Operacional Resgatada</span>
-                <div class="flex items-center gap-2 mt-1"><span class="material-symbols-outlined text-fg-tertiary text-[24px]" aria-hidden="true">savings</span><span class="font-headline-sm text-headline-sm text-fg-primary font-bold">+ {{ d.result.annualSavings | currency: 'BRL' }} /ano</span></div></div>
+            <div class="bg-surface-container-lowest p-space-lg rounded-xl shadow-sm relative overflow-hidden flex flex-col justify-between gap-space-md min-h-[168px]">
+              <div class="absolute top-0 left-0 w-1.5 h-full bg-primary"></div>
+              <span class="font-label-md text-label-md text-on-surface-variant uppercase tracking-wider">Economia Anual</span>
+              <div><span class="font-metric-numeral text-[30px] leading-[44px] font-extrabold tracking-tight text-fg-primary">{{ d.annualSavings | currency: 'BRL' }}</span>
+                <p class="font-body-sm text-body-sm text-fg-secondary mt-1">Equivale a <strong class="text-fg-primary font-semibold">{{ monthly() | currency: 'BRL' }}/mês</strong></p></div>
             </div>
-          } @else {
-            <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-space-md" role="status" aria-label="Carregando indicadores">
-              @for (n of [1,2,3,4]; track n) {
-                <div class="bg-surface-container-lowest p-space-lg rounded-xl shadow-sm flex flex-col justify-between gap-space-md min-h-[168px]">
-                  <div class="sk h-3 w-28"></div><div class="flex flex-col gap-2"><div class="sk h-9 w-40"></div><div class="sk h-3 w-full"></div></div>
-                </div>
-              }
+            <div class="bg-surface-container-lowest p-space-lg rounded-xl shadow-sm relative overflow-hidden flex flex-col justify-between gap-space-md min-h-[168px]">
+              <div class="absolute top-0 left-0 w-1.5 h-full bg-secondary-fixed-dim"></div>
+              <span class="font-label-md text-label-md text-on-surface-variant uppercase tracking-wider">Payback Estimado</span>
+              <div><span class="font-metric-numeral text-metric-numeral text-fg-primary">{{ d.paybackMonths | number: '1.1-1' }}</span> <span class="font-headline-md text-headline-md text-fg-secondary">meses</span>
+                <p class="font-body-sm text-body-sm text-on-surface-variant mt-1">Tempo estimado para recuperar o investimento</p></div>
             </div>
-            <div class="bg-surface-container-low rounded-2xl p-space-lg grid grid-cols-1 md:grid-cols-3 gap-space-lg items-center">
-              @for (n of [1,2,3]; track n) { <div class="flex flex-col gap-2"><div class="sk h-3 w-40"></div><div class="sk h-[30px] w-48"></div><div class="sk h-3 w-44"></div></div> }
+            <div class="bg-tertiary-fixed/30 p-space-lg rounded-xl shadow-sm relative overflow-hidden flex flex-col justify-between gap-space-md min-h-[168px]">
+              <div class="absolute top-0 left-0 w-1.5 h-full bg-tertiary-container"></div>
+              <span class="font-label-md text-label-md text-fg-tertiary font-bold uppercase tracking-wider">Descarbonização</span>
+              <div><span class="font-metric-numeral text-metric-numeral text-fg-tertiary">{{ d.co2ReductionTons | number: '1.2-2' }}</span> <span class="font-label-lg text-label-lg text-on-tertiary-fixed-variant font-semibold">tCO₂e/ano</span>
+                <p class="font-body-sm text-body-sm text-on-tertiary-fixed-variant mt-1">Emissões evitadas por ano</p></div>
             </div>
-          }
+          </div>
+          <div class="bg-surface-container-low rounded-2xl p-space-lg grid grid-cols-1 md:grid-cols-3 gap-space-lg items-center">
+            <div><span class="font-label-mono text-label-mono text-on-surface-variant uppercase tracking-wider">Custo anual atual</span>
+              <div class="font-metric-numeral-sm text-metric-numeral-sm text-on-surface mt-1">{{ annualCost() | currency: 'BRL' }}</div>
+              <span class="font-body-sm text-body-sm text-on-surface-variant">12 × a fatura mensal informada</span></div>
+            <div><span class="font-label-mono text-label-mono text-fg-tertiary font-bold uppercase tracking-wider">Custo anual com a solução</span>
+              <div class="font-metric-numeral-sm text-metric-numeral-sm text-fg-primary mt-1">{{ optimizedCost() | currency: 'BRL' }}</div>
+              <span class="font-body-sm text-body-sm text-fg-secondary">Após a redução estimada</span></div>
+            <div class="bg-surface-container-lowest p-space-md rounded-xl flex flex-col justify-center"><span class="font-label-mono text-label-mono text-on-surface-variant uppercase">Economia anual estimada</span>
+              <div class="flex items-center gap-2 mt-1"><span class="material-symbols-outlined text-fg-tertiary text-[24px]" aria-hidden="true">savings</span><span class="font-headline-sm text-headline-sm text-fg-primary font-bold">+ {{ d.annualSavings | currency: 'BRL' }}</span></div></div>
+          </div>
         </section>
 
-        <!-- SUBSISTEMAS -->
-        <section class="flex flex-col gap-space-lg" aria-labelledby="sub-h" [attr.aria-busy]="!rep()">
-          <div><span class="font-label-mono text-label-mono text-fg-secondary uppercase tracking-widest">Desagregação Técnica</span>
-            <h2 id="sub-h" class="font-headline-lg text-headline-lg text-fg-primary tracking-tight">Oportunidades Mapeadas por Subsistema Operacional</h2></div>
-          <div class="grid grid-cols-1 xl:grid-cols-3 gap-space-lg">
-            @if (rep(); as d) {
-              @for (s of d.subsystems; track s.key) {
-                <article class="bg-surface-container-lowest rounded-2xl shadow-sm flex flex-col justify-between overflow-hidden hover:shadow-md transition-shadow">
-                  <div class="p-space-lg flex flex-col gap-space-md">
-                    <div class="flex items-start justify-between gap-space-sm">
-                      <div class="flex items-center gap-space-sm">
-                        <div class="w-10 h-10 rounded-xl flex items-center justify-center shrink-0" [class]="s.iconBox"><span class="material-symbols-outlined text-[22px]" aria-hidden="true">{{ s.icon }}</span></div>
-                        <div><h3 class="font-headline-sm text-headline-sm text-fg-primary">{{ s.title }}</h3><span class="font-label-mono text-label-mono text-fg-secondary">{{ s.subtitle }}</span></div>
-                      </div>
-                      <span class="px-space-sm py-1 rounded font-label-mono text-label-mono shrink-0" [class]="s.chip">{{ s.sharePct | number: '1.0-0' }}% do Total</span>
-                    </div>
-                    <div class="flex flex-col gap-1">
-                      <div class="flex justify-between font-label-mono text-label-mono text-on-surface-variant gap-2"><span>Consumo Mensal: <strong>{{ s.kwhMonth | number: '1.0-0' }} kWh</strong></span><span class="font-bold" [class]="s.accent">Redução Potencial: {{ s.reductionPct }}%</span></div>
-                      <div class="w-full bg-surface-container h-2 rounded-full overflow-hidden"><div class="h-full rounded-full" [class]="s.bar" [style.width.%]="s.reductionPct"></div></div>
-                    </div>
-                    <div class="bg-surface-container-low p-space-md rounded-xl"><span class="font-label-mono text-label-mono text-fg-primary font-bold uppercase">Memorial Diagnóstico:</span><p class="font-body-sm text-body-sm text-on-surface-variant mt-1">{{ s.memo }}</p></div>
-                  </div>
-                  <div class="bg-surface-container/60 p-space-lg flex items-center justify-between">
-                    <div><span class="font-label-mono text-label-mono text-fg-secondary uppercase">Economia Mensal</span><div class="font-headline-sm text-headline-sm text-fg-primary font-bold">{{ s.savingsMonth | currency: 'BRL' }}</div></div>
-                    <div class="text-right"><span class="font-label-mono text-label-mono text-fg-secondary uppercase">Anual</span><div class="font-label-lg text-label-lg text-on-surface font-semibold">{{ s.savingsYear | currency: 'BRL' }}</div></div>
-                  </div>
-                </article>
-              }
-            } @else {
-              @for (n of [1,2,3]; track n) {
-                <article class="bg-surface-container-lowest rounded-2xl shadow-sm flex flex-col justify-between overflow-hidden" role="status" aria-label="Carregando subsistema">
-                  <div class="p-space-lg flex flex-col gap-space-md">
-                    <div class="flex items-center gap-space-sm"><div class="sk w-10 h-10 rounded-xl"></div><div class="flex flex-col gap-2"><div class="sk h-4 w-36"></div><div class="sk h-3 w-24"></div></div></div>
-                    <div class="flex flex-col gap-2"><div class="sk h-3 w-full"></div><div class="sk h-2 w-full rounded-full"></div></div>
-                    <div class="sk h-28 w-full rounded-xl"></div>
-                  </div>
-                  <div class="bg-surface-container/60 p-space-lg flex items-center justify-between"><div class="sk h-9 w-28"></div><div class="sk h-9 w-24"></div></div>
-                </article>
-              }
+        <section class="bg-surface-container-lowest rounded-3xl p-space-lg xl:p-space-xl shadow-sm" aria-labelledby="amort-h">
+          <div class="flex flex-col xl:flex-row justify-between xl:items-center gap-space-md pb-space-lg">
+            <div><span class="font-label-mono text-label-mono text-fg-secondary uppercase tracking-widest">Retorno do investimento</span>
+              <h2 id="amort-h" class="font-headline-lg text-headline-lg text-fg-primary tracking-tight">Curva de Amortização</h2>
+              <p class="font-body-md text-body-md text-on-surface-variant mt-1">Fluxo de caixa acumulado, calculado a partir da economia mensal e do payback estimados.</p></div>
+            @if (chart(); as c) {
+              <div class="flex flex-wrap items-center gap-space-md bg-surface-container-low px-space-md py-space-sm rounded-xl">
+                <div><span class="font-label-mono text-label-mono text-on-surface-variant uppercase">Investimento implícito</span><div class="font-headline-sm text-headline-sm text-fg-primary font-bold">{{ c.invest | currency: 'BRL' }}</div></div>
+                <div><span class="font-label-mono text-label-mono text-on-surface-variant uppercase">Saldo em {{ c.horizon }} meses</span><div class="font-headline-sm text-headline-sm text-fg-primary font-bold">{{ c.end | currency: 'BRL' }}</div></div>
+              </div>
             }
           </div>
-        </section>
-
-        <!-- AMORTIZAÇÃO -->
-        <section class="bg-surface-container-lowest rounded-3xl p-space-lg lg:p-space-xl shadow-sm" aria-labelledby="amort-h" [attr.aria-busy]="!rep()">
-          <div class="flex flex-col xl:flex-row justify-between xl:items-center gap-space-md pb-space-lg">
-            <div><span class="font-label-mono text-label-mono text-fg-secondary uppercase tracking-widest">Engenharia Econômica</span>
-              <h2 id="amort-h" class="font-headline-lg text-headline-lg text-fg-primary tracking-tight">Curva de Amortização &amp; Ponto de Equilíbrio</h2>
-              <p class="font-body-md text-body-md text-on-surface-variant mt-1">Projeção do fluxo de caixa acumulado em 24 meses</p></div>
-            <div class="flex flex-wrap items-center gap-space-md bg-surface-container-low px-space-md py-space-sm rounded-xl min-h-[68px]">
-              @if (rep(); as d) {
-                <div><span class="font-label-mono text-label-mono text-on-surface-variant uppercase">Capex Total</span><div class="font-headline-sm text-headline-sm text-fg-primary font-bold">{{ d.result.capex | currency: 'BRL' }}</div></div>
-                <div><span class="font-label-mono text-label-mono text-on-surface-variant uppercase">TIR Projetada</span><div class="font-headline-sm text-headline-sm text-fg-tertiary font-bold">{{ d.tirAnnualPct | number: '1.0-0' }}% a.a.</div></div>
-                <div><span class="font-label-mono text-label-mono text-on-surface-variant uppercase">Saldo em 24m</span><div class="font-headline-sm text-headline-sm text-fg-primary font-bold">+ {{ d.balance24m | currency: 'BRL' }}</div></div>
-              } @else { @for (n of [1,2,3]; track n) { <div class="flex flex-col gap-2"><div class="sk h-3 w-20"></div><div class="sk h-7 w-28"></div></div> } }
-            </div>
-          </div>
-          @if (rep(); as d) {
-            <figure class="relative w-full rounded-2xl p-space-md mb-space-lg">
+          @if (chart(); as c) {
+            <figure class="relative w-full rounded-2xl p-space-md">
               <figcaption class="flex items-center justify-between mb-space-md text-on-surface-variant font-label-mono text-label-mono flex-wrap gap-2">
-                <span class="flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-primary-container inline-block"></span>Fluxo Acumulado Líquido</span>
-                <span class="flex items-center gap-2 text-fg-tertiary font-bold"><span class="material-symbols-outlined text-[16px]" aria-hidden="true">flag</span>Break-Even: Mês {{ d.result.paybackMonths | number: '1.0-0' }}</span>
+                <span class="flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-primary-container inline-block"></span>Fluxo acumulado líquido</span>
+                <span class="flex items-center gap-2 text-fg-tertiary font-bold"><span class="material-symbols-outlined text-[16px]" aria-hidden="true">flag</span>Equilíbrio em {{ d.paybackMonths | number: '1.1-1' }} meses</span>
               </figcaption>
               <div class="w-full h-64 relative">
-                <svg class="w-full h-full overflow-visible" preserveAspectRatio="none" viewBox="0 0 1000 240" role="img" [attr.aria-label]="'Curva de amortização: equilíbrio no mês ' + (d.result.paybackMonths | number: '1.0-0')">
-                  <line x1="0" x2="1000" y1="140" y2="140" class="stroke-outline-variant" stroke-dasharray="4 4" stroke-width="1.5" />
-                  <line [attr.x1]="bx()" [attr.x2]="bx()" y1="20" y2="220" class="stroke-fg-tertiary" stroke-opacity=".5" stroke-dasharray="2 2" stroke-width="1.5" />
-                  <defs><linearGradient id="chartGradient" x1="0" x2="0" y1="0" y2="1"><stop offset="0" style="stop-color: rgb(var(--c-fg-primary))" stop-opacity=".25" /><stop offset="1" style="stop-color: rgb(var(--c-fg-primary))" stop-opacity="0" /></linearGradient></defs>
-                  <path [attr.d]="curve() + ' L 1000 220 L 0 220 Z'" fill="url(#chartGradient)" opacity=".6" />
-                  <path [attr.d]="curve()" fill="none" class="stroke-fg-primary" stroke-linecap="round" stroke-width="3.5" />
-                  <circle cx="0" cy="210" r="5" class="fill-fg-primary" />
-                  <circle [attr.cx]="bx()" cy="140" r="8" class="fill-fg-tertiary stroke-surface-container-lowest" stroke-width="2" />
-                  <circle cx="1000" cy="30" r="6" class="fill-fg-primary stroke-surface-container-lowest" stroke-width="2" />
+                <svg class="w-full h-full overflow-visible" preserveAspectRatio="none" viewBox="0 0 1000 240" role="img" [attr.aria-label]="'Curva de amortização: equilíbrio em ' + (d.paybackMonths | number: '1.1-1') + ' meses'">
+                  <line x1="0" x2="1000" [attr.y1]="c.zeroY" [attr.y2]="c.zeroY" class="stroke-outline-variant" stroke-dasharray="4 4" stroke-width="1.5" />
+                  <line [attr.x1]="c.breakX" [attr.x2]="c.breakX" y1="20" y2="220" class="stroke-fg-tertiary" stroke-opacity=".5" stroke-dasharray="2 2" stroke-width="1.5" />
+                  <path [attr.d]="c.path" fill="none" class="stroke-fg-primary" stroke-linecap="round" stroke-width="3.5" />
+                  <circle cx="0" [attr.cy]="c.startY" r="5" class="fill-fg-primary" />
+                  <circle [attr.cx]="c.breakX" [attr.cy]="c.zeroY" r="8" class="fill-fg-tertiary stroke-surface-container-lowest" stroke-width="2" />
+                  <circle cx="1000" [attr.cy]="c.endY" r="6" class="fill-fg-primary stroke-surface-container-lowest" stroke-width="2" />
                 </svg>
-                <div class="absolute left-0 bottom-2 bg-surface-container px-2 py-1 rounded text-on-surface font-label-mono text-label-mono">Mês 0: -{{ d.result.capex | currency: 'BRL' }}</div>
-                <div class="absolute top-[45%] bg-tertiary text-on-tertiary px-2.5 py-1 rounded-md font-label-mono text-label-mono shadow-sm" [style.left.%]="Math.min(bx() / 10 + 2, 62)">Mês {{ d.result.paybackMonths | number: '1.0-0' }}: Break-Even</div>
-                <div class="absolute right-0 top-2 bg-primary text-on-primary px-2.5 py-1 rounded font-label-mono text-label-mono">Mês 24: +{{ d.balance24m | currency: 'BRL' }}</div>
               </div>
+              <div class="flex justify-between text-on-surface-variant font-label-mono text-label-mono mt-2"><span>Mês 0: {{ -c.invest | currency: 'BRL' }}</span><span>Mês {{ c.horizon }}: {{ c.end | currency: 'BRL' }}</span></div>
             </figure>
           } @else {
-            <div class="w-full rounded-2xl p-space-md mb-space-lg" role="status" aria-label="Carregando curva de amortização">
-              <div class="flex items-center justify-between mb-space-md"><div class="sk h-3 w-40"></div><div class="sk h-3 w-32"></div></div>
-              <div class="sk w-full h-64 rounded-xl"></div>
-            </div>
+            <p class="p-space-md rounded-xl bg-surface-container-low font-body-md text-body-md text-on-surface-variant">Para os parâmetros informados não há economia estimada, então não há curva de amortização para exibir.</p>
           }
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-space-md">
-            <div class="bg-surface-container-low p-space-md rounded-2xl flex items-start gap-space-sm"><div class="w-10 h-10 rounded-xl bg-tertiary-fixed text-on-tertiary-fixed-variant flex items-center justify-center shrink-0"><span class="material-symbols-outlined text-[22px]" aria-hidden="true">eco</span></div>
-              <div><h3 class="font-headline-sm text-headline-sm text-fg-primary">Enquadramento BNDES Finame Verde</h3><p class="font-body-sm text-body-sm text-on-surface-variant mt-1">Este projeto atende aos requisitos de taxa subsidiada com carência de até 12 meses, permitindo que as parcelas sejam amortizadas pela própria economia mensal gerada.</p></div></div>
-            <div class="bg-surface-container-low p-space-md rounded-2xl flex items-start gap-space-sm"><div class="w-10 h-10 rounded-xl bg-secondary-container text-on-secondary-container flex items-center justify-center shrink-0"><span class="material-symbols-outlined text-[22px]" aria-hidden="true">verified_user</span></div>
-              <div><h3 class="font-headline-sm text-headline-sm text-fg-primary">Garantia de Performance (Performance Bond)</h3><p class="font-body-sm text-body-sm text-on-surface-variant mt-1">Em caso de desvio superior a 5% da meta de redução de kWh, a diferença de custo operacional é coberta pela apólice de desempenho segurada.</p></div></div>
-          </div>
         </section>
 
-        <!-- RESPONSÁVEL TÉCNICO -->
-        <section class="grid grid-cols-1 xl:grid-cols-12 gap-space-lg items-center bg-surface-container-lowest rounded-3xl p-space-lg shadow-sm">
-          <div class="xl:col-span-4 flex items-center gap-space-md">
-            <div class="w-20 h-20 rounded-2xl bg-primary-container text-on-primary flex items-center justify-center font-headline-md text-headline-md shrink-0" aria-hidden="true">MF</div>
-            <div><span class="font-label-mono text-label-mono text-fg-secondary uppercase">Responsável Técnico</span><h3 class="font-headline-sm text-headline-sm text-fg-primary">Eng. Marcelo Fontes</h3>
-              <p class="font-body-sm text-body-sm text-on-surface-variant">CREA/SP 506.128 - Certificação CEM®</p>
-              <div class="flex items-center gap-1 text-fg-tertiary font-label-mono text-label-mono mt-1"><span class="material-symbols-outlined text-[14px]" aria-hidden="true">shield_person</span>Auditor Sênior Credenciado</div></div>
+        <!-- Relatório completo (texto devolvido pelo backend em GET /leads/{id}/report) -->
+        <section class="bg-surface-container-lowest rounded-3xl p-space-lg xl:p-space-xl shadow-sm flex flex-col gap-space-lg no-print" aria-labelledby="full-h" [attr.aria-busy]="full().status === 'loading'">
+          <div class="flex flex-col xl:flex-row xl:items-center justify-between gap-space-md">
+            <div><span class="font-label-mono text-label-mono text-fg-secondary uppercase tracking-widest">Dossiê técnico</span>
+              <h2 id="full-h" class="font-headline-lg text-headline-lg text-fg-primary tracking-tight">Relatório Completo</h2>
+              <p class="font-body-md text-body-md text-on-surface-variant mt-1">Versão detalhada emitida pela plataforma, com os dados informados e os resultados estimados do seu diagnóstico.</p></div>
+            <div class="flex flex-wrap items-center gap-space-sm shrink-0">
+              @if (full().status === 'ready' && full().text) {
+                <button type="button" (click)="copyFull()" class="inline-flex items-center justify-center gap-space-xs px-space-md h-12 rounded-lg bg-surface-container text-on-surface font-label-lg text-label-lg hover:bg-surface-container-high">
+                  <span class="material-symbols-outlined text-[18px] text-fg-primary" aria-hidden="true">content_copy</span>Copiar texto
+                </button>
+              }
+              <button type="button" (click)="loadFull()" [disabled]="full().status === 'loading'" class="inline-flex items-center justify-center gap-space-xs px-space-md h-12 rounded-lg bg-primary-container hover:bg-primary text-on-primary font-label-lg text-label-lg shadow-sm disabled:opacity-60">
+                <span class="material-symbols-outlined text-[18px]" [class.animate-spin]="full().status === 'loading'" aria-hidden="true">{{ full().status === 'loading' ? 'sync' : full().status === 'ready' ? 'refresh' : 'article' }}</span>{{ full().status === 'ready' ? 'Atualizar' : 'Ver relatório completo' }}
+              </button>
+            </div>
           </div>
-          <blockquote class="xl:col-span-8 bg-surface-container-low p-space-md rounded-2xl min-h-[96px]"><span class="font-label-mono text-label-mono text-on-surface-variant uppercase">Parecer Preliminar da Engenharia:</span>
-            @if (rep(); as d) {
-              <p class="font-body-md text-body-md text-on-surface-variant mt-1">“A curva de carga da planta da {{ d.lead.company }} apresenta oscilações severas no horário de ponta associadas ao arrefecimento central. A substituição proposta combinada ao Daylighting na nave de produção viabiliza retorno atrativo, classificando o projeto como de prioridade máxima de implantação imediata.”</p>
-            } @else { <div class="flex flex-col gap-2 mt-2" role="status" aria-label="Carregando parecer"><div class="sk h-4 w-full"></div><div class="sk h-4 w-full"></div><div class="sk h-4 w-3/4"></div></div> }
-          </blockquote>
+
+          @switch (full().status) {
+            @case ('idle') {
+              <div class="rounded-2xl border border-dashed border-outline-variant bg-surface-container-low p-space-lg flex flex-col sm:flex-row items-start sm:items-center gap-space-md">
+                <span class="w-12 h-12 rounded-xl bg-secondary-container text-on-secondary-container flex items-center justify-center shrink-0"><span class="material-symbols-outlined text-[24px]" aria-hidden="true">description</span></span>
+                <div class="flex flex-col gap-1">
+                  <p class="font-label-lg text-label-lg text-fg-primary font-semibold">Seu dossiê está pronto para consulta</p>
+                  <p class="font-body-sm text-body-sm text-on-surface-variant">Reúne protocolo, dados da empresa, parâmetros informados e todos os indicadores calculados em um só lugar.</p>
+                </div>
+              </div>
+            }
+            @case ('loading') {
+              <div class="flex flex-col gap-space-md" role="status" aria-label="Carregando relatório completo">
+                <div class="sk h-16 w-full rounded-2xl"></div>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-space-md"><div class="sk h-40 rounded-2xl"></div><div class="sk h-40 rounded-2xl"></div></div>
+                <div class="grid grid-cols-2 xl:grid-cols-5 gap-space-md">@for (n of [1, 2, 3, 4, 5]; track n) { <div class="sk h-24 rounded-xl"></div> }</div>
+              </div>
+            }
+            @case ('error') {
+              <div class="p-space-md rounded-xl bg-error-container text-on-error-container flex items-start gap-space-sm" role="alert">
+                <span class="material-symbols-outlined text-[20px] shrink-0" aria-hidden="true">cloud_off</span>
+                <div class="flex-1"><p class="font-label-lg text-label-lg font-bold">{{ fullError()?.title }}</p><p class="font-body-sm text-body-sm">{{ fullError()?.message }}</p></div>
+              </div>
+            }
+            @case ('ready') {
+              @if (fullLink(); as link) {
+                <a [href]="link" target="_blank" rel="noopener noreferrer" class="inline-flex w-max items-center gap-2 px-space-md h-12 rounded-lg bg-primary-container text-on-primary font-label-lg text-label-lg hover:bg-primary"><span class="material-symbols-outlined text-[18px]" aria-hidden="true">open_in_new</span>Abrir relatório</a>
+              } @else if (parsedFull()) {
+                @let r = parsedFull()!;
+                <article class="flex flex-col gap-space-md" aria-label="Relatório completo">
+                  <header class="relative overflow-hidden rounded-2xl bg-surface-container-low p-space-md md:p-space-lg flex flex-col lg:flex-row lg:items-center justify-between gap-space-md">
+                    <div class="absolute top-0 left-0 w-1.5 h-full bg-primary-container"></div>
+                    <div class="flex items-start gap-space-sm min-w-0">
+                      <span class="material-symbols-outlined text-[28px] text-fg-primary shrink-0" aria-hidden="true">verified</span>
+                      <h3 class="font-headline-sm text-headline-sm text-fg-primary font-bold">{{ r.title }}</h3>
+                    </div>
+                    @if (r.meta.length) {
+                      <dl class="flex flex-wrap gap-x-space-lg gap-y-space-xs shrink-0">
+                        @for (m of r.meta; track m.label) {
+                          <div class="flex flex-col min-w-0"><dt class="font-label-mono text-label-mono text-on-surface-variant uppercase tracking-wider">{{ m.label }}</dt>
+                            <dd class="font-label-lg text-label-lg text-on-surface font-semibold break-all">{{ m.value }}</dd></div>
+                        }
+                      </dl>
+                    }
+                  </header>
+
+                  @let info = infoSections(r.sections);
+                  @if (info.length) {
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-space-md">
+                      @for (sec of info; track sec.key) {
+                        <section class="rounded-2xl bg-surface-container-low p-space-md md:p-space-lg flex flex-col gap-space-sm" [attr.aria-label]="sec.title">
+                          <h4 class="flex items-center gap-2 font-label-mono text-label-mono text-fg-secondary font-bold uppercase tracking-widest">
+                            <span class="material-symbols-outlined text-[18px]" aria-hidden="true">{{ sectionIcon(sec.key) }}</span>{{ sec.title }}</h4>
+                          <dl class="flex flex-col divide-y divide-outline-variant/40">
+                            @for (row of sec.rows; track row.label) {
+                              <div class="py-space-xs flex flex-col sm:flex-row sm:items-baseline sm:justify-between gap-x-space-md gap-y-0.5">
+                                <dt class="font-body-sm text-body-sm text-on-surface-variant shrink-0">{{ row.label }}</dt>
+                                <dd class="font-label-lg text-label-lg text-on-surface font-semibold sm:text-right break-words">{{ row.value }}</dd>
+                              </div>
+                            }
+                          </dl>
+                        </section>
+                      }
+                    </div>
+                  }
+
+                  @for (sec of resultSections(r.sections); track sec.key) {
+                    <section class="flex flex-col gap-space-sm" [attr.aria-label]="sec.title">
+                      <h4 class="flex items-center gap-2 font-label-mono text-label-mono text-fg-secondary font-bold uppercase tracking-widest">
+                        <span class="material-symbols-outlined text-[18px]" aria-hidden="true">{{ sectionIcon(sec.key) }}</span>{{ sec.title }}</h4>
+                      <dl class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-space-md">
+                        @for (row of sec.rows; track row.label; let i = $index) {
+                          <div class="relative overflow-hidden rounded-xl p-space-md flex flex-col justify-between gap-space-sm min-h-[112px]"
+                            [class]="isCarbon(row.label) ? 'bg-tertiary-fixed/30' : 'bg-surface-container-low'">
+                            <div class="absolute top-0 left-0 w-1.5 h-full" [class]="isCarbon(row.label) ? 'bg-tertiary-container' : accent(i)"></div>
+                            <dt class="font-label-md text-label-md uppercase tracking-wider" [class]="isCarbon(row.label) ? 'text-fg-tertiary font-bold' : 'text-on-surface-variant'">{{ row.label }}</dt>
+                            <dd class="font-headline-sm text-headline-sm font-bold break-words" [class]="isCarbon(row.label) ? 'text-fg-tertiary' : 'text-fg-primary'">{{ row.value }}</dd>
+                          </div>
+                        }
+                      </dl>
+                    </section>
+                  }
+
+                  @for (note of r.notes; track $index) {
+                    <p class="flex items-start gap-space-sm p-space-md rounded-xl bg-secondary-container/40 text-on-surface-variant font-body-sm text-body-sm">
+                      <span class="material-symbols-outlined text-[20px] text-fg-secondary shrink-0" aria-hidden="true">info</span>{{ note }}</p>
+                  }
+                </article>
+              } @else {
+                <pre class="whitespace-pre-wrap break-words font-body-sm text-body-sm text-on-surface bg-surface-container-low rounded-xl p-space-md max-h-[28rem] overflow-auto">{{ full().text }}</pre>
+              }
+            }
+          }
         </section>
 
-        <!-- CTA -->
-        <section class="bg-primary-container text-on-primary rounded-3xl p-space-lg lg:p-space-xl shadow-xl no-print">
+        <section class="bg-primary-container text-on-primary rounded-3xl p-space-lg xl:p-space-xl shadow-xl no-print">
           <div class="flex flex-col xl:flex-row xl:items-center justify-between gap-space-xl">
             <div class="max-w-2xl flex flex-col gap-space-sm">
-              <div class="inline-flex items-center gap-2 px-space-sm py-1 rounded bg-secondary/30 text-lit-secondary font-label-mono text-label-mono w-max"><span class="material-symbols-outlined text-[16px]" aria-hidden="true">schedule</span>Validação Técnica Sem Compromisso</div>
-              <h2 class="font-display-mobile text-display-mobile xl:font-display xl:text-display tracking-tight">Pronto para validar o memorial técnico com um engenheiro sênior?</h2>
-              <p class="font-body-lg text-body-lg text-on-primary-container">Apresentamos o plano detalhado de capex, cronograma executivo de intervenção sem parada fabril e memorial de engenharia em uma sessão técnica de 30 minutos.</p>
+              <div class="inline-flex items-center gap-2 px-space-sm py-1 rounded bg-secondary/30 text-lit-secondary font-label-mono text-label-mono w-max"><span class="material-symbols-outlined text-[16px]" aria-hidden="true">schedule</span>Próximo passo</div>
+              <h2 class="font-display-mobile text-display-mobile xl:font-display xl:text-display tracking-tight">Valide este diagnóstico com a nossa equipe técnica</h2>
+              <p class="font-body-lg text-body-lg text-on-primary-container">Agende uma sessão para detalhar o investimento, o cronograma de implantação e o retorno esperado para a sua empresa.</p>
             </div>
             <div class="shrink-0 flex flex-col sm:flex-row xl:flex-col gap-space-sm">
-              <a [routerLink]="['/agendamento', id()]" class="inline-flex items-center justify-center gap-space-xs px-space-lg h-14 rounded-xl bg-lit-tertiary hover:bg-lit-tertiary-dim text-lit-on-tertiary font-headline-sm text-headline-sm font-bold shadow-md">Agendar Diagnóstico com Especialista<span class="material-symbols-outlined text-[22px]" aria-hidden="true">arrow_forward</span></a>
-              <a [href]="whatsapp()" target="_blank" rel="noopener noreferrer" class="inline-flex items-center justify-center gap-space-xs px-space-lg h-12 rounded-xl hover:bg-white/10 text-on-primary font-label-lg text-label-lg border border-on-primary/20"><span class="material-symbols-outlined text-[18px]" aria-hidden="true">chat</span>Tirar dúvidas pelo WhatsApp Corporativo</a>
+              <a routerLink="/agendamento" class="inline-flex items-center justify-center gap-space-xs px-space-lg h-14 rounded-xl bg-lit-tertiary hover:bg-lit-tertiary-dim text-lit-on-tertiary font-headline-sm text-headline-sm font-bold shadow-md">Agendar reunião<span class="material-symbols-outlined text-[22px]" aria-hidden="true">arrow_forward</span></a>
+              <a [href]="whatsapp()" target="_blank" rel="noopener noreferrer" class="inline-flex items-center justify-center gap-space-xs px-space-lg h-12 rounded-xl hover:bg-white/10 text-on-primary font-label-lg text-label-lg border border-on-primary/20"><span class="material-symbols-outlined text-[18px]" aria-hidden="true">chat</span>Tirar dúvidas pelo WhatsApp</a>
             </div>
           </div>
         </section>
@@ -289,81 +313,132 @@ import { LoadingButtonComponent } from '../shared/loading-button.component';
     }
   `,
 })
-export class RelatorioPage implements OnInit {
+export class RelatorioPage {
   private readonly api = inject(ApiService);
   private readonly toast = inject(ToastService);
   readonly store = inject(JourneyStore);
-  readonly Math = Math;
-
-  /** Vazio = etapa do formulário; preenchido = relatório (com skeleton enquanto carrega). */
-  readonly id = signal('');
-  readonly rep = signal<Report | null>(null);
-  readonly error = signal<ApiError | null>(null);
-  readonly bx = computed(() => ((this.rep()?.result.paybackMonths ?? 10) / 24) * 1000);
-  readonly curve = computed(() => `M 0 210 Q 200 180 ${this.bx()} 140 T 1000 30`);
-  readonly whatsapp = computed(() => whatsappUrl('Olá, gostaria de tirar dúvidas sobre o Relatório EcoMetric ' + this.id()));
-
-  readonly submitting = signal(false);
-  readonly serverError = signal<string | null>(null);
-  private leadKey = uuid();
+  readonly report = this.store.report;
 
   readonly dossierItems = [
-    'Diagnóstico desagregado: HVAC, iluminação e automação predial.',
-    'Tabela de amortização de Capex e TIR (Taxa Interna de Retorno).',
-    'Certificação de emissões evitadas para balanço anual ESG.',
+    'Indicadores de economia, payback e emissões evitadas.',
+    'Curva de amortização do investimento.',
+    'Relatório completo gerado pela plataforma.',
   ];
 
+  /* ----- formulário de identificação ----- */
   private readonly fb = inject(FormBuilder).nonNullable;
-  /** Identificação do cliente (compartilhada com o agendamento) + aceite dos termos. */
   readonly form = this.fb.group({
-    client: buildIdentificationGroup(this.fb, { corporateEmail: true, initial: this.store.client() ?? {} }),
+    client: buildIdentificationGroup(this.fb, { initial: this.store.client() ?? {} }),
     terms: [false, Validators.requiredTrue],
   });
   private readonly identification = viewChild(IdentificationFormComponent);
+  readonly submitting = signal(false);
+  readonly submitError = signal<FriendlyError | null>(null);
+  readonly serverError = signal<string | null>(null);
+  readonly duplicate = signal(false);
+  /** A mesma chave é reaproveitada em reenvios idênticos (falha de rede); muda quando os dados mudam. */
+  private leadKey = uuid();
 
   constructor() {
-    this.form.controls.client.controls.email.valueChanges.pipe(takeUntilDestroyed()).subscribe(() => this.serverError.set(null));
-  }
-
-  /** Se já existe um relatório em memória (ex.: voltou do agendamento), exibe direto; senão mostra o formulário. */
-  ngOnInit() {
-    const cached = this.store.report();
-    if (cached) { this.id.set(cached.id); this.rep.set(cached); }
+    this.form.valueChanges.pipe(takeUntilDestroyed()).subscribe(() => {
+      this.leadKey = uuid();
+      this.submitError.set(null);
+      this.serverError.set(null);
+      this.duplicate.set(false);
+    });
   }
 
   submit() {
+    if (this.submitting()) return;
     if (this.form.invalid) {
       this.form.markAllAsTouched();
       this.identification()?.focusFirstInvalid();
-      this.toast.show('Revise o formulário', 'Preencha todos os campos e use um e-mail corporativo.', 'error');
+      this.toast.show('Revise o formulário', 'Preencha todos os campos e aceite os termos para continuar.', 'error');
       return;
     }
-    const lead = this.form.controls.client.getRawValue();
+    const client = this.form.controls.client.getRawValue();
+    const body: LeadRequest = {
+      fullName: client.name.trim(), corporateEmail: client.email.trim(), phone: client.phone, jobTitle: client.role.trim(), companyName: client.company.trim(),
+      diagnostic: { ...this.store.input() },
+      consent: { termVersion: TERMS_VERSION, accepted: true },
+    };
     this.submitting.set(true);
-    this.api.createLead(lead, this.store.input(), this.leadKey).subscribe({
-      next: ({ id }) => {
+    this.submitError.set(null);
+    this.api.createLead(body, this.leadKey).subscribe({
+      next: (lead) => {
         this.submitting.set(false);
-        this.store.lead.set({ ...lead, id });
-        this.store.client.set(lead);
-        this.id.set(id);
-        this.toast.show('Relatório gerado', 'O dossiê também foi enviado para o seu e-mail corporativo.');
-        this.fetchReport();
+        this.store.client.set(client);
+        this.store.report.set(lead);
+        this.toast.show('Relatório gerado', 'Seu diagnóstico está pronto.');
       },
       error: (e: ApiError) => {
         this.submitting.set(false);
-        if (e.status === 400) { this.leadKey = uuid(); this.serverError.set('Informe o e-mail corporativo da sua empresa para emitir o laudo.'); this.identification()?.focusField('email'); }
+        const f = friendly(e, 'lead');
+        this.submitError.set(f);
+        if (e.status === 409 && e.code !== 'REQUEST_IN_PROGRESS') { this.duplicate.set(true); this.serverError.set('Este e-mail já possui um diagnóstico.'); this.identification()?.focusField('email'); }
+        if (e.status >= 400 && e.status < 500 && e.code !== 'REQUEST_IN_PROGRESS') this.leadKey = uuid(); // erro de validação: próxima tentativa é uma nova requisição
       },
     });
   }
 
-  /** Consulta o relatório recém-gerado; as seções mostram skeleton até a resposta. */
-  fetchReport() {
-    this.error.set(null);
-    this.rep.set(null);
-    this.api.getReport(this.id()).subscribe({
-      next: (r) => { this.store.setReport(r); this.rep.set(r); },
-      error: (e: ApiError) => this.error.set(e),
+  /* ----- relatório ----- */
+  readonly shortId = computed(() => (this.report()?.id ?? '').slice(0, 8).toUpperCase());
+  readonly monthly = computed(() => (this.report()?.diagnostic.annualSavings ?? 0) / 12);
+  readonly annualCost = computed(() => (this.report()?.diagnostic.monthlyEnergyBill ?? 0) * 12);
+  readonly optimizedCost = computed(() => this.annualCost() - (this.report()?.diagnostic.annualSavings ?? 0));
+  readonly whatsapp = computed(() => whatsappUrl(`Olá, gostaria de tirar dúvidas sobre o meu relatório #${this.shortId()}.`));
+  dateTime = dateTimeOf;
+
+  /** Curva linear: investimento implícito = payback × economia mensal; fluxo acumulado = economia × mês − investimento. */
+  readonly chart = computed(() => {
+    const d = this.report()?.diagnostic;
+    if (!d) return null;
+    const monthly = d.annualSavings / 12;
+    if (!(monthly > 0) || !(d.paybackMonths > 0)) return null;
+    const invest = d.paybackMonths * monthly;
+    const horizon = Math.max(24, Math.ceil(d.paybackMonths) + 6);
+    const end = monthly * horizon - invest;
+    const top = 20, bottom = 220, W = 1000;
+    const min = -invest, max = Math.max(end, 0);
+    const y = (v: number) => bottom - ((v - min) / (max - min)) * (bottom - top);
+    return { invest, horizon, end, zeroY: y(0), startY: y(-invest), endY: y(end), breakX: (d.paybackMonths / horizon) * W, path: `M 0 ${y(-invest)} L ${W} ${y(end)}` };
+  });
+
+  readonly full = signal<{ status: 'idle' | 'loading' | 'ready' | 'error'; text?: string }>({ status: 'idle' });
+  readonly fullError = signal<FriendlyError | null>(null);
+  readonly fullLink = computed(() => { const t = this.full().text?.trim() ?? ''; return /^https?:\/\/\S+$/i.test(t) ? t : null; });
+  readonly parsedFull = computed(() => parseReportText(this.full().text));
+
+  private static readonly SECTION_ICONS: Record<string, string> = { CLIENTE: 'apartment', 'DADOS INFORMADOS': 'tune', 'RESULTADOS ESTIMADOS': 'insights' };
+  private static readonly ACCENTS = ['bg-primary-container', 'bg-primary', 'bg-secondary-fixed-dim', 'bg-secondary'];
+  private static readonly isResult = (sec: ReportSection) => sec.key.startsWith('RESULTADO');
+  sectionIcon = (key: string) => RelatorioPage.SECTION_ICONS[key] ?? 'segment';
+  infoSections = (sections: ReportSection[]) => sections.filter((sec) => !RelatorioPage.isResult(sec));
+  resultSections = (sections: ReportSection[]) => sections.filter(RelatorioPage.isResult);
+  accent = (i: number) => RelatorioPage.ACCENTS[i % RelatorioPage.ACCENTS.length];
+  isCarbon = (label: string) => /co₂|co2|carbono/i.test(label);
+
+  async copyFull() {
+    const text = this.full().text;
+    if (!text) return;
+    try {
+      await navigator.clipboard.writeText(text);
+      this.toast.show('Relatório copiado', 'O texto completo está na sua área de transferência.');
+    } catch {
+      this.toast.show('Não foi possível copiar', 'Selecione o texto e copie manualmente.', 'error');
+    }
+  }
+
+  loadFull() {
+    const id = this.report()?.id;
+    if (!id || this.full().status === 'loading') return;
+    this.full.set({ status: 'loading' });
+    this.fullError.set(null);
+    this.api.getReportText(id).subscribe({
+      next: (text) => this.full.set({ status: 'ready', text }),
+      error: (e: ApiError) => { this.fullError.set(friendly(e, 'lead')); this.full.set({ status: 'error' }); },
     });
   }
+
   print() { window.print(); }
 }

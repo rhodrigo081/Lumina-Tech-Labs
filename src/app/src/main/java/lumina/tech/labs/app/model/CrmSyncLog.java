@@ -6,7 +6,7 @@ import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.UUID;
 
 /**
@@ -49,11 +49,7 @@ public class CrmSyncLog {
 
     @CreationTimestamp
     @Column(name = "synced_at", updatable = false)
-    private LocalDateTime syncedAt;
+    private Instant syncedAt;
 
-    @PrePersist
-    private void prePersist(){
-        this.syncedAt = LocalDateTime.now();
-    }
 
 }

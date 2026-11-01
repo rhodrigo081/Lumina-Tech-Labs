@@ -1,12 +1,13 @@
 package lumina.tech.labs.app.exception;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.List;
 
 public record ApiErrorResponse(
-        LocalDateTime timestamp,
+        Instant timestamp,
         int status,
         String error,
+        String code,
         String message,
         String path,
         List<FieldError> fieldErrors

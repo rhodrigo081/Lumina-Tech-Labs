@@ -10,11 +10,8 @@ import java.util.UUID;
 public interface CompanyRepository extends JpaRepository<Company, UUID> {
 
     /**
-     * Companies are derived from the corporate email domain, so lookup
-     * by domain is the primary access pattern (used to decide whether
-     * to reuse an existing Company or create a new one for a Lead).
+     * Leads with a corporate email are grouped by domain: the oldest Company
+     * with that domain is reused. Never used for personal providers.
      */
-    Optional<Company> findByEmailDomain(String emailDomain);
-
-    boolean existsByEmailDomain(String emailDomain);
+    Optional<Company> findFirstByEmailDomainOrderByCreatedAtAsc(String emailDomain);
 }

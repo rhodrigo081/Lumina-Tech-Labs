@@ -11,6 +11,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Map;
 import java.util.UUID;
@@ -44,9 +46,21 @@ public class CrmSyncService {
         this.activeProvider = activeProvider;
     }
 
+    /**
+     * REQUIRES_NEW is mandatory here: this runs from an AFTER_COMMIT listener, and
+     * any write that merely "joins" the already-committed transaction is silently
+     * never flushed — which is why crm_sync_log used to stay empty.
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void syncLead(UUID leadId) {
         Lead lead = leadRepository.findById(leadId).orElseThrow(() -> new LeadNotFoundException(leadId));
         CrmAdapter adapter = adaptersByProvider.get(activeProvider);
+        if (adapter == null) {
+            log.warn("No CrmAdapter registered for provider {}; lead {} stays PENDING", activeProvider, leadId);
+            crmSyncLogRepository.save(CrmSyncLog.builder().lead(lead).crmProvider(activeProvider)
+                    .syncStatus(SyncStatus.PENDING).build());
+            return;
+        }
 
         CrmSyncLog.CrmSyncLogBuilder logBuilder = CrmSyncLog.builder()
                 .lead(lead)
