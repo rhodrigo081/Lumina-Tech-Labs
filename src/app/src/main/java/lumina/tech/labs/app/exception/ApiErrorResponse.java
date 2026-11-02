@@ -10,7 +10,8 @@ public record ApiErrorResponse(
         String code,
         String message,
         String path,
-        List<FieldError> fieldErrors
+        List<FieldError> fieldErrors,
+        String traceId
 ) {
     public record FieldError(String field, String message) {
     }

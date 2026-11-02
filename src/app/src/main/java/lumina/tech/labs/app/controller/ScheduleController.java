@@ -22,13 +22,11 @@ public class ScheduleController {
         this.scheduleService = scheduleService;
     }
 
-    /** FR02.1 — public: open slots created by admins, optionally filtered by technician. */
     @GetMapping("/slots")
     public ResponseEntity<List<ScheduleSlotResponse>> getSlots(@RequestParam(required = false) UUID technicianId) {
         return ResponseEntity.ok(scheduleService.getAvailableSlots(technicianId));
     }
 
-    /** FR02.2 / FR02.3 — public endpoint; the Lead itself acts as the caller's credential (leadId in the body). */
     @PostMapping("/book")
     public ResponseEntity<ScheduleResponse> book(@Valid @RequestBody ScheduleBookingRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(scheduleService.book(request));

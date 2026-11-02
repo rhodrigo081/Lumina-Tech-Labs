@@ -7,7 +7,6 @@ import org.hibernate.annotations.CreationTimestamp;
 import java.time.Instant;
 import java.util.UUID;
 
-/** Internal user of the admin area. `passwordHash` is always a BCrypt hash. */
 @Entity
 @Table(name = "admin_user", uniqueConstraints = {
         @UniqueConstraint(name = "uk_admin_user_email", columnNames = "email")

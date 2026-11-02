@@ -20,7 +20,6 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/** Personal emails are accepted, but never merge different people into the same Company. */
 @DataJpaTest
 @TestPropertySource(properties = {
         "spring.flyway.enabled=false",
@@ -60,6 +59,6 @@ class LeadCompanyGroupingTest {
     private static LeadCaptureRequest request(String email, String company) {
         return new LeadCaptureRequest("Pessoa Teste", email, "(81) 99999-0001", "Gerente", company,
                 new DiagnosticInputRequest(new BigDecimal("500"), 20, new BigDecimal("8000"), "STANDARD_CORPORATE_BUILDING"),
-                new ConsentRequest("v1", true));
+                new ConsentRequest("v1.0", true));
     }
 }

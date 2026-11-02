@@ -15,7 +15,6 @@ import java.util.UUID;
 
 public interface AvailabilitySlotRepository extends JpaRepository<AvailabilitySlot, UUID> {
 
-    /** Public grid: open slots of active technicians in a time window. */
     @EntityGraph(attributePaths = "technician")
     @Query("""
             select s from AvailabilitySlot s
@@ -39,7 +38,6 @@ public interface AvailabilitySlotRepository extends JpaRepository<AvailabilitySl
                                                  @Param("to") Instant to,
                                                  @Param("technicianId") UUID technicianId);
 
-    /** Admin view: every slot (open or booked) in a window. */
     @EntityGraph(attributePaths = "technician")
     @Query("""
             select s from AvailabilitySlot s
@@ -58,7 +56,6 @@ public interface AvailabilitySlotRepository extends JpaRepository<AvailabilitySl
                                                     @Param("to") Instant to,
                                                     @Param("technicianId") UUID technicianId);
 
-    /** Slots of a technician that overlap [from, to) — used to reject overlapping slot creation. */
     @Query("""
             select s from AvailabilitySlot s
             where s.technician.id = :technicianId and s.startTime < :to and s.endTime > :from
@@ -70,10 +67,6 @@ public interface AvailabilitySlotRepository extends JpaRepository<AvailabilitySl
     @EntityGraph(attributePaths = "technician")
     Optional<AvailabilitySlot> findWithTechnicianById(UUID id);
 
-    /**
-     * Atomic AVAILABLE -> BOOKED transition. Returns 0 when somebody else
-     * booked it first (or it already started) — the anti double-booking lock.
-     */
     @Modifying(flushAutomatically = true, clearAutomatically = true)
     @Query("""
             update AvailabilitySlot s set s.status = :booked
@@ -88,7 +81,6 @@ public interface AvailabilitySlotRepository extends JpaRepository<AvailabilitySl
     @Query("update AvailabilitySlot s set s.status = :status where s.id = :id")
     int updateStatus(@Param("id") UUID id, @Param("status") SlotStatus status);
 
-    /** Deletes only if still open: a booked slot is referenced by a meeting and must stay. */
     @Modifying(flushAutomatically = true, clearAutomatically = true)
     @Query("delete from AvailabilitySlot s where s.id = :id and s.status = :available")
     int deleteIfOpen(@Param("id") UUID id, @Param("available") SlotStatus available);

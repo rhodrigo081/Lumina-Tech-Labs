@@ -28,7 +28,6 @@ import java.util.UUID;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
-/** Admin management of the availability slots leads can book. */
 @Service
 public class AdminSlotService {
 

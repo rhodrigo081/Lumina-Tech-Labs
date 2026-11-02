@@ -15,7 +15,6 @@ const STORAGE_KEY = 'ecm.sidebar.collapsed';
       </div>
     }
 
-    <!-- Botão flutuante (somente mobile): não há header -->
     <button type="button" (click)="mobileOpen.set(true)" aria-label="Abrir menu" aria-controls="sidebar" [attr.aria-expanded]="mobileOpen()" data-chrome
       class="lg:hidden fixed top-3 left-3 z-40 w-11 h-11 rounded-xl bg-surface-container-lowest text-fg-primary shadow-md flex items-center justify-center">
       <span class="material-symbols-outlined" aria-hidden="true">menu</span>
@@ -56,7 +55,7 @@ const STORAGE_KEY = 'ecm.sidebar.collapsed';
               <span class="material-symbols-outlined text-[18px]" aria-hidden="true">{{ o.icon }}</span>
             </button>
           }
-        </div>  
+        </div>
         <button type="button" (click)="theme.cycle()" [attr.aria-label]="'Tema: ' + currentLabel() + '. Clique para alternar'" [attr.title]="'Tema: ' + currentLabel()"
           class="hidden items-center justify-center h-11 rounded-lg text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-colors" [class]="collapsed() ? 'lg:flex' : ''">
           <span class="material-symbols-outlined text-[22px]" aria-hidden="true">{{ currentIcon() }}</span>
@@ -108,11 +107,9 @@ export class ShellComponent {
   readonly currentLabel = computed(() => this.themes.find((t) => t.mode === this.theme.mode())!.label);
 
   readonly mobileOpen = signal(false);
-  /** Preferência salva; sem preferência, começa recolhida em telas menores que 1280px. */
   readonly collapsed = signal(this.initialCollapsed());
 
   readonly nav = computed(() => {
-    const id = this.store.lead().id;
     const items = [
       { label: 'Diagnóstico', icon: 'calculate', link: '/diagnostico' },
       { label: 'Agendamento', icon: 'calendar_month', link: `/agendamento` },
@@ -125,7 +122,7 @@ export class ShellComponent {
 
   toggle() {
     this.collapsed.update((v) => !v);
-    try { localStorage.setItem(STORAGE_KEY, String(this.collapsed())); } catch { /* storage indisponível */ }
+    try { localStorage.setItem(STORAGE_KEY, String(this.collapsed())); } catch { }
   }
 
   @HostListener('document:keydown.escape') closeMobile() { this.mobileOpen.set(false); }
@@ -134,7 +131,7 @@ export class ShellComponent {
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
       if (saved !== null) return saved === 'true';
-    } catch { /* ignora */ }
+    } catch { }
     return typeof window !== 'undefined' && window.innerWidth < 1280;
   }
 }

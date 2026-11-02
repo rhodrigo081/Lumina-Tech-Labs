@@ -5,7 +5,7 @@ import { ApiService } from '../core/api.service';
 import { FriendlyError, friendly } from '../core/errors';
 import { ApiError } from '../core/models';
 import { JourneyStore, ToastService } from '../core/state.services';
-import { maskPhone, uuid, whatsappUrl } from '../core/utils';
+import { EMAIL_PATTERN, MAX, maskPhone, notBlank, uuid, whatsappUrl } from '../core/utils';
 import { LoadingButtonComponent } from '../shared/loading-button.component';
 
 type Field = 'name' | 'email' | 'phone' | 'company' | 'subject' | 'message';
@@ -36,17 +36,17 @@ type Field = 'name' | 'email' | 'phone' | 'company' | 'subject' | 'message';
             <form [formGroup]="form" (ngSubmit)="submit()" class="flex flex-col gap-space-md" novalidate>
               <div class="grid grid-cols-1 sm:grid-cols-2 gap-space-md">
                 <div class="flex flex-col gap-1"><label for="c-name" class="font-label-lg text-label-lg text-fg-primary font-semibold">Nome completo *</label>
-                  <input id="c-name" formControlName="name" autocomplete="name" placeholder="Seu nome" class="w-full h-12 px-4 rounded-lg bg-surface-container-low text-fg-primary" [attr.aria-invalid]="!!err('name')" [attr.aria-describedby]="err('name') ? 'e-name' : null" />
+                  <input id="c-name" formControlName="name" [maxlength]="max.name" autocomplete="name" placeholder="Seu nome" class="w-full h-12 px-4 rounded-lg bg-surface-container-low text-fg-primary" [attr.aria-invalid]="!!err('name')" [attr.aria-describedby]="err('name') ? 'e-name' : null" />
                   @if (err('name'); as m) { <p id="e-name" class="font-body-sm text-body-sm text-fg-error" role="alert">{{ m }}</p> }</div>
                 <div class="flex flex-col gap-1"><label for="c-company" class="font-label-lg text-label-lg text-fg-primary font-semibold">Empresa</label>
-                  <input id="c-company" formControlName="company" autocomplete="organization" placeholder="Opcional" class="w-full h-12 px-4 rounded-lg bg-surface-container-low text-fg-primary" /></div>
+                  <input id="c-company" formControlName="company" [maxlength]="max.company" autocomplete="organization" placeholder="Opcional" class="w-full h-12 px-4 rounded-lg bg-surface-container-low text-fg-primary" /></div>
               </div>
               <div class="grid grid-cols-1 sm:grid-cols-2 gap-space-md">
                 <div class="flex flex-col gap-1"><label for="c-email" class="font-label-lg text-label-lg text-fg-primary font-semibold">E-mail *</label>
-                  <input id="c-email" type="email" formControlName="email" autocomplete="email" placeholder="voce&#64;empresa.com.br" class="w-full h-12 px-4 rounded-lg bg-surface-container-low text-fg-primary" [attr.aria-invalid]="!!err('email')" [attr.aria-describedby]="err('email') ? 'e-email' : null" />
+                  <input id="c-email" type="email" formControlName="email" [maxlength]="max.email" autocapitalize="off" spellcheck="false" autocomplete="email" placeholder="voce&#64;empresa.com.br" class="w-full h-12 px-4 rounded-lg bg-surface-container-low text-fg-primary" [attr.aria-invalid]="!!err('email')" [attr.aria-describedby]="err('email') ? 'e-email' : null" />
                   @if (err('email'); as m) { <p id="e-email" class="font-body-sm text-body-sm text-fg-error" role="alert">{{ m }}</p> }</div>
                 <div class="flex flex-col gap-1"><label for="c-phone" class="font-label-lg text-label-lg text-fg-primary font-semibold">Telefone / WhatsApp *</label>
-                  <input id="c-phone" type="tel" formControlName="phone" (input)="onPhone($event)" autocomplete="tel" placeholder="(81) 99999-0001" class="w-full h-12 px-4 rounded-lg bg-surface-container-low text-fg-primary" [attr.aria-invalid]="!!err('phone')" [attr.aria-describedby]="err('phone') ? 'e-phone' : null" />
+                  <input id="c-phone" type="tel" inputmode="tel" formControlName="phone" [maxlength]="max.phone" (input)="onPhone($event)" autocomplete="tel" placeholder="(81) 99999-0001" class="w-full h-12 px-4 rounded-lg bg-surface-container-low text-fg-primary" [attr.aria-invalid]="!!err('phone')" [attr.aria-describedby]="err('phone') ? 'e-phone' : null" />
                   @if (err('phone'); as m) { <p id="e-phone" class="font-body-sm text-body-sm text-fg-error" role="alert">{{ m }}</p> }</div>
               </div>
               <div class="flex flex-col gap-1"><label for="c-subject" class="font-label-lg text-label-lg text-fg-primary font-semibold">Assunto *</label>
@@ -93,15 +93,16 @@ type Field = 'name' | 'email' | 'phone' | 'company' | 'subject' | 'message';
 })
 export class ContatoPage {
   private readonly api = inject(ApiService);
+  readonly max = MAX;
   private readonly toast = inject(ToastService);
 
   readonly form = inject(FormBuilder).nonNullable.group({
-    name: ['', [Validators.required, Validators.minLength(3)]],
-    email: ['', [Validators.required, Validators.email]],
-    phone: ['', [Validators.required, Validators.minLength(14)]],
-    company: [''],
-    subject: ['', [Validators.required, Validators.maxLength(120)]],
-    message: ['', [Validators.required, Validators.minLength(10), Validators.maxLength(1000)]],
+    name: ['', [Validators.required, notBlank, Validators.minLength(3), Validators.maxLength(MAX.name)]],
+    email: ['', [Validators.required, Validators.email, Validators.pattern(EMAIL_PATTERN), Validators.maxLength(MAX.email)]],
+    phone: ['', [Validators.required, Validators.minLength(14), Validators.maxLength(MAX.phone)]],
+    company: ['', Validators.maxLength(MAX.company)],
+    subject: ['', [Validators.required, notBlank, Validators.maxLength(120)]],
+    message: ['', [Validators.required, notBlank, Validators.minLength(10), Validators.maxLength(1000)]],
   });
   private readonly store = inject(JourneyStore);
   readonly submitting = signal(false);
@@ -110,7 +111,6 @@ export class ContatoPage {
   private key = uuid();
 
   private readonly value = toSignal(this.form.valueChanges, { initialValue: this.form.getRawValue() });
-  /** Mensagem do WhatsApp montada com o que já foi preenchido. */
   readonly waUrl = computed(() => {
     const v = this.value();
     const lines = ['Olá! Gostaria de falar com a equipe da Lumina Tech Labs.'];
@@ -122,7 +122,6 @@ export class ContatoPage {
   });
 
   constructor() {
-    // quem já se identificou em outra etapa não precisa digitar tudo de novo
     const c = this.store.client();
     if (c) this.form.patchValue({ name: c.name, email: c.email, phone: c.phone, company: c.company });
   }
@@ -131,7 +130,8 @@ export class ContatoPage {
     const c = this.form.controls[name];
     if (!c.invalid || !c.touched) return null;
     if (c.hasError('required')) return 'Campo obrigatório.';
-    if (c.hasError('email')) return 'Informe um e-mail válido.';
+    if (c.hasError('email') || c.hasError('pattern')) return 'Informe um e-mail válido.';
+    if (c.hasError('maxlength')) return `Máximo de ${c.getError('maxlength').requiredLength} caracteres.`;
     if (c.hasError('minlength')) return name === 'phone' ? 'Informe o telefone com DDD.' : 'Texto muito curto.';
     return 'Valor inválido.';
   }

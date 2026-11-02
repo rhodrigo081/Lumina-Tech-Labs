@@ -1,36 +1,66 @@
 server:
-  # Trust X-Forwarded-For/X-Forwarded-Proto only when they come from an internal proxy
-  # (our nginx on the Docker network). request.getRemoteAddr() then returns the real
-  # client IP and cannot be forged by the visitor (used in the LGPD consent log).
+  port: ${PORT:8080}
   forward-headers-strategy: native
+  shutdown: graceful
+  error:
+    include-message: never
+    include-stacktrace: never
+    include-binding-errors: never
+    include-exception: false
+    whitelabel:
+      enabled: false
+  tomcat:
+    connection-timeout: 10s
+    threads:
+      max: 100
+    accept-count: 100
+    max-http-form-post-size: 64KB
+    max-swallow-size: 64KB
 
 spring:
+  lifecycle:
+    timeout-per-shutdown-phase: 20s
+  task:
+    execution:
+      pool:
+        core-size: 4
+        max-size: 16
+        queue-capacity: 500
   datasource:
     url: ${DB_URL}
     username: ${DB_USER}
     password: ${DB_PASSWORD}
     driver-class-name: org.postgresql.Driver
     hikari:
-      maximum-pool-size: 3 # Mantém o pool enxuto para serverless
+      maximum-pool-size: 3
       minimum-idle: 1
       connection-timeout: 20000
   jpa:
     hibernate:
-      ddl-auto: validate   # schema managed by Flyway, not Hibernate
-    open-in-view: false     # avoid the OSIV anti-pattern with lazy relations (see LeadRepository @EntityGraph)
+      ddl-auto: validate
+    open-in-view: false
     properties:
       hibernate:
         jdbc:
-          time_zone: UTC    # all timestamps are TIMESTAMPTZ / java.time.Instant (see V2 migration)
+          time_zone: UTC
   data:
     redis:
       host: ${REDIS_HOST}
       port: ${REDIS_PORT}
+      password: ${REDIS_PASSWORD:}
+      timeout: 2s
   mail:
     host: ${MAIL_HOST}
     port: ${MAIL_PORT}
     username: ${MAIL_USERNAME}
     password: ${MAIL_PASSWORD}
+    properties:
+      mail.smtp.auth: true
+      mail.smtp.starttls.enable: true
+      mail.smtp.starttls.required: ${MAIL_STARTTLS_REQUIRED:true}
+      mail.smtp.connectiontimeout: 10000
+      mail.smtp.timeout: 10000
+      mail.smtp.writetimeout: 10000
 
 lumina:
   cors:
@@ -38,38 +68,37 @@ lumina:
 
   security:
     jwt:
-      secret: ${JWT_SECRET}   # HS256 key for admin tokens — at least 32 characters
-      ttl-minutes: 480
+      secret: ${JWT_SECRET}
+      ttl-minutes: ${JWT_TTL_MINUTES:120}
 
-  # First admin user, created at startup only while the admin_user table is empty.
   admin:
     bootstrap:
-      email: ${ADMIN_EMAIL:}
-      password: ${ADMIN_PASSWORD:}
+      email: ${ADMIN_EMAIL}
+      password: ${ADMIN_PASSWORD}
       name: ${ADMIN_NAME:Administrador}
 
   scheduling:
-    zone: America/Sao_Paulo      # zone admins use when creating slots (dates/times typed in the admin area)
-    min-notice-minutes: 60       # leads cannot book a slot starting sooner than this
-    booking-window-days: 60      # how far ahead the public grid shows slots
+    zone: America/Sao_Paulo
+    min-notice-minutes: 60
+    booking-window-days: 60
 
   meeting:
-    # jitsi  -> real Jitsi Meet room, no setup needed (default)
-    # google -> Google Calendar event + Google Meet link; Google emails the invite to lead and technician
-    provider: ${MEETING_PROVIDER:jitsi}
-    jitsi:
-      base-url: ${JITSI_BASE_URL:https://meet.jit.si}
     google:
       client-id: ${GOOGLE_CLIENT_ID:}
       client-secret: ${GOOGLE_CLIENT_SECRET:}
       refresh-token: ${GOOGLE_REFRESH_TOKEN:}
       calendar-id: ${GOOGLE_CALENDAR_ID:primary}
 
+  consent:
+    term-version: v1.0
+
+  rate-limit:
+    enabled: ${RATE_LIMIT_ENABLED:true}
+
   idempotency:
     ttl-minutes: 15
 
   diagnostic:
-    reduction-factor: 0.28
     investment-per-workstation: 350
     co2-factor-per-real: 0.00042
 
@@ -89,9 +118,21 @@ management:
     web:
       exposure:
         include: health,info
+  endpoint:
+    health:
+      show-details: never
+  info:
+    env:
+      enabled: false
+
+logging:
+  pattern:
+    correlation: "[req=%X{requestId:-}] "
 
 springdoc:
   api-docs:
+    enabled: ${API_DOCS_ENABLED:false}
     path: /v3/api-docs
   swagger-ui:
+    enabled: ${API_DOCS_ENABLED:false}
     path: /swagger-ui.html

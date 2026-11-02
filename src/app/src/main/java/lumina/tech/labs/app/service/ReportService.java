@@ -1,5 +1,6 @@
 package lumina.tech.labs.app.service;
 
+import lumina.tech.labs.app.engine.InfrastructureProfile;
 import lumina.tech.labs.app.model.Diagnostic;
 import lumina.tech.labs.app.model.Lead;
 import org.springframework.beans.factory.annotation.Value;
@@ -13,11 +14,6 @@ import java.time.format.DateTimeFormatter;
 import java.util.Locale;
 import java.util.UUID;
 
-/**
- * FR01.3 — builds the "full report" shown on the report page. Plain text for
- * now (the frontend renders it in a <pre>); swap for a PDF generator
- * (OpenPDF/PDFBox) when the visual report is designed.
- */
 @Service
 public class ReportService {
 
@@ -55,7 +51,7 @@ public class ReportService {
                 "  Área:                    " + number.format(d.getAreaM2()) + " m²",
                 "  Estações de trabalho:    " + d.getWorkstations(),
                 "  Fatura mensal de energia: " + money.format(d.getMonthlyEnergyBill()),
-                "  Infraestrutura atual:    " + d.getCurrentInfrastructure(),
+                "  Infraestrutura atual:    " + InfrastructureProfile.labelOf(d.getCurrentInfrastructure()),
                 "",
                 "RESULTADOS ESTIMADOS",
                 "  Redução de consumo:      " + number.format(d.getConsumptionReductionPct()) + "%",

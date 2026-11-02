@@ -14,7 +14,6 @@ public record AdminSlotResponse(
         SlotStatus status,
         Booking booking
 ) {
-    /** Who booked the slot (null while AVAILABLE). */
     public record Booking(UUID scheduleId, UUID leadId, String leadName, String companyName) {
     }
 }

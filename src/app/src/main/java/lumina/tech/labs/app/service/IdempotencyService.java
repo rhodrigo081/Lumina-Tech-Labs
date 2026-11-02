@@ -13,21 +13,6 @@ import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicReference;
 
-/**
- * Backs the `Idempotency-Key` header on POST /api/v1/leads (design doc,
- * section 2 — Redis is used for "cache & idempotency").
- *
- * Lifecycle of a key:
- *   1. {@link #begin} atomically reserves it as PENDING (SETNX), so concurrent
- *      duplicates (double click) are rejected with 409 REQUEST_IN_PROGRESS.
- *   2. When the surrounding transaction COMMITS, the key is overwritten with
- *      the id of the created resource, and later retries replay that result
- *      instead of failing.
- *   3. When the transaction ROLLS BACK (validation conflict, DB error...), the
- *      key is deleted, so a retry with the same key is processed normally —
- *      previously a failed request kept the key "used" for 15 minutes and the
- *      client's automatic retry got a misleading 409.
- */
 @Service
 public class IdempotencyService {
 
@@ -43,12 +28,6 @@ public class IdempotencyService {
         this.ttl = Duration.ofMinutes(ttlMinutes);
     }
 
-    /**
-     * Must be called inside an active transaction.
-     *
-     * @return the id of the already-created resource when this key completed before
-     *         (caller must replay it), or a {@link Reservation} to report the new id into.
-     */
     public Result begin(String scope, String idempotencyKey) {
         if (idempotencyKey.isBlank() || idempotencyKey.length() > MAX_KEY_LENGTH) {
             throw ApiException.badRequest("INVALID_IDEMPOTENCY_KEY",
@@ -60,7 +39,6 @@ public class IdempotencyService {
         if (!Boolean.TRUE.equals(reserved)) {
             String value = redisTemplate.opsForValue().get(redisKey);
             if (value == null) {
-                // Expired/deleted between the two calls: just try once more.
                 return begin(scope, idempotencyKey);
             }
             if (PENDING.equals(value)) {
@@ -87,7 +65,6 @@ public class IdempotencyService {
     public record Result(Optional<UUID> completedResourceId, Reservation reservation) {
     }
 
-    /** Handle used by the caller to report the id of the resource it created. */
     public static final class Reservation {
         private final AtomicReference<UUID> resourceId = new AtomicReference<>();
 

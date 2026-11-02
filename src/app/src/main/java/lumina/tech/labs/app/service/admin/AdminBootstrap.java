@@ -6,16 +6,11 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.ApplicationArguments;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Transactional;
 
-/**
- * Creates the first admin from ADMIN_EMAIL / ADMIN_PASSWORD when the
- * admin_user table is empty. Once an admin exists this does nothing, so
- * the env vars can (and should) be removed after the first start.
- */
 @Component
 public class AdminBootstrap implements ApplicationRunner {
 
@@ -41,7 +36,6 @@ public class AdminBootstrap implements ApplicationRunner {
     }
 
     @Override
-    @Transactional
     public void run(ApplicationArguments args) {
         if (adminUserRepository.count() > 0) {
             return;
@@ -54,11 +48,16 @@ public class AdminBootstrap implements ApplicationRunner {
             log.warn("ADMIN_PASSWORD must have at least {} characters; first admin NOT created.", MIN_PASSWORD_LENGTH);
             return;
         }
-        adminUserRepository.save(AdminUser.builder()
-                .name(name)
-                .email(email.trim().toLowerCase())
-                .passwordHash(passwordEncoder.encode(password))
-                .build());
+        try {
+            adminUserRepository.saveAndFlush(AdminUser.builder()
+                    .name(name)
+                    .email(email.trim().toLowerCase())
+                    .passwordHash(passwordEncoder.encode(password))
+                    .build());
+        } catch (DataIntegrityViolationException ex) {
+            log.info("First admin user was created by another instance");
+            return;
+        }
         log.info("First admin user created for {}", email.trim().toLowerCase());
     }
 }

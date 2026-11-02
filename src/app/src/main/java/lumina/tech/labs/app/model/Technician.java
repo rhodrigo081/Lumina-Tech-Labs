@@ -7,11 +7,6 @@ import org.hibernate.annotations.CreationTimestamp;
 import java.time.Instant;
 import java.util.UUID;
 
-/**
- * A Lumina technician/consultant that leads can book a diagnostic meeting
- * with. Managed by admins; deactivating one hides their open slots from
- * the public booking grid without deleting history.
- */
 @Entity
 @Table(name = "technician", uniqueConstraints = {
         @UniqueConstraint(name = "uk_technician_email", columnNames = "email")

@@ -15,24 +15,16 @@ function restore(): Persisted {
   try { return JSON.parse(sessionStorage.getItem(KEY) ?? '{}') as Persisted; } catch { return {}; }
 }
 
-/**
- * Estado da jornada (diagnóstico → relatório → agendamento → confirmação).
- * Fica salvo no sessionStorage da aba: recarregar a página não perde o andamento (fechar a aba limpa tudo).
- */
 @Injectable({ providedIn: 'root' })
 export class JourneyStore {
   private readonly saved = restore();
 
   readonly input = signal<DiagnosticInput>(isInput(this.saved.input) ? this.saved.input : DEFAULT_INPUT);
-  /** Última identificação preenchida: pré-preenche os próximos formulários. */
   readonly client = signal<Identification | null>(this.saved.client ?? null);
-  /** Lead criado no backend, com o diagnóstico calculado. */
   readonly report = signal<LeadResponse | null>(this.saved.report ?? null);
   readonly booking = signal<BookingRecord | null>(this.saved.booking ?? null);
-  /** Verdadeiro depois do clique em "Gerar relatório" (libera a rota do relatório). */
   readonly reportRequested = signal(false);
 
-  /** Atalho de compatibilidade: identificação + id do lead. */
   readonly lead = computed(() => ({
     id: this.report()?.id ?? '',
     name: this.client()?.name ?? this.report()?.fullName ?? '',
@@ -43,12 +35,11 @@ export class JourneyStore {
   constructor() {
     effect(() => {
       const data: Persisted = { input: this.input(), client: this.client(), report: this.report(), booking: this.booking() };
-      try { sessionStorage.setItem(KEY, JSON.stringify(data)); } catch { /* storage indisponível */ }
+      try { sessionStorage.setItem(KEY, JSON.stringify(data)); } catch { }
     });
   }
 }
 
-/** Contador de requisições em andamento — alimenta a barra global de progresso. */
 @Injectable({ providedIn: 'root' })
 export class LoadingService {
   private readonly count = signal(0);

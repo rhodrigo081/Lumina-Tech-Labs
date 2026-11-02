@@ -7,7 +7,6 @@ import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
 
-/** Implements FR03.2's qualification thresholds, also externalized for tuning. */
 @Component
 public class ScoringEngine {
 

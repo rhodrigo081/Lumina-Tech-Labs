@@ -79,10 +79,6 @@ public class AdminLeadService {
                 technicianRepository.countByActiveTrue());
     }
 
-    /**
-     * @param search    free text over name, email and company (case-insensitive)
-     * @param scheduled true = only leads with an active meeting, false = only without one
-     */
     @Transactional(readOnly = true)
     public PageResponse<AdminLeadSummaryResponse> search(String search, Priority priority, Boolean scheduled,
                                                          int page, int size) {

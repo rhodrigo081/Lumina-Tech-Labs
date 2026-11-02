@@ -7,6 +7,7 @@ import { friendly } from '../../core/errors';
 import { ApiError } from '../../core/models';
 import { ToastService } from '../../core/state.services';
 import { LoadingButtonComponent } from '../../shared/loading-button.component';
+import { EMAIL_PATTERN, notBlank } from '../../core/utils';
 
 @Component({
   selector: 'ecm-admin-technicians',
@@ -60,7 +61,7 @@ import { LoadingButtonComponent } from '../../shared/loading-button.component';
             </div>
             <div class="flex flex-col gap-1">
               <label for="t-email" class="adm-label">E-mail</label>
-              <input id="t-email" type="email" formControlName="email" autocomplete="off" maxlength="255" class="adm-input" placeholder="ana@luminatechlabs.com"
+              <input id="t-email" type="email" formControlName="email" autocapitalize="off" spellcheck="false" autocomplete="off" maxlength="255" class="adm-input" placeholder="ana@luminatechlabs.com"
                 [attr.aria-invalid]="form.controls.email.touched && form.controls.email.invalid" />
               <span class="font-body-sm text-body-sm text-on-surface-variant">Recebe o convite de cada reunião agendada.</span>
               @if (form.controls.email.touched && form.controls.email.invalid) { <p class="font-body-sm text-body-sm text-fg-error" role="alert">Informe um e-mail válido.</p> }
@@ -100,9 +101,9 @@ export class AdminTechniciansPage implements OnInit {
   readonly formError = signal<string | null>(null);
 
   readonly form = this.fb.group({
-    name: ['', [Validators.required, Validators.maxLength(150)]],
-    email: ['', [Validators.required, Validators.email, Validators.maxLength(255)]],
-    specialty: [''],
+    name: ['', [Validators.required, notBlank, Validators.maxLength(150)]],
+    email: ['', [Validators.required, Validators.email, Validators.pattern(EMAIL_PATTERN), Validators.maxLength(255)]],
+    specialty: ['', Validators.maxLength(150)],
     active: [true],
   });
 

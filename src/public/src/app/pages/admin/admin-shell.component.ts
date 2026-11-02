@@ -1,13 +1,15 @@
 import { Component, HostListener, inject, signal } from '@angular/core';
 import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { AdminAuthService } from '../../core/admin/admin-auth.service';
+import { AdminIdleService } from '../../core/admin/admin-idle.service';
+import { ConfirmDialogComponent } from '../../shared/confirm-dialog.component';
 import { LoadingService, ToastService } from '../../core/state.services';
 import { ThemeService } from '../../core/theme.service';
 
-/** Layout da área administrativa: menu lateral próprio, separado do funil público. */
 @Component({
   selector: 'ecm-admin-shell',
-  imports: [RouterOutlet, RouterLink, RouterLinkActive],
+  imports: [RouterOutlet, RouterLink, RouterLinkActive, ConfirmDialogComponent],
+  providers: [AdminIdleService],
   template: `
     @if (loading.active()) {
       <div class="fixed top-0 inset-x-0 h-1 z-[60] bg-surface-container-high overflow-hidden" role="progressbar" aria-label="Carregando dados">
@@ -76,13 +78,36 @@ import { ThemeService } from '../../core/theme.service';
       </div>
     }
 
-    <main class="min-h-screen bg-surface pt-16 lg:pt-0 lg:pl-[248px]">
+    <ecm-confirm-dialog />
+
+    @if (idle.secondsLeft() !== null) {
+      <div class="fixed inset-0 z-[70] bg-black/50 flex items-center justify-center px-gutter">
+        <div class="w-full max-w-md rounded-2xl bg-surface-container-lowest shadow-xl p-space-lg flex flex-col gap-space-md" role="alertdialog" aria-modal="true" aria-labelledby="idle-title" aria-describedby="idle-msg">
+          <div class="flex items-start gap-space-sm">
+            <div class="w-10 h-10 rounded-full shrink-0 flex items-center justify-center bg-surface-container text-fg-primary">
+              <span class="material-symbols-outlined text-[22px]" aria-hidden="true">timer</span>
+            </div>
+            <div class="flex flex-col gap-1">
+              <h2 id="idle-title" class="font-headline-sm text-headline-sm text-fg-primary font-bold">Sessão inativa</h2>
+              <p id="idle-msg" class="font-body-sm text-body-sm text-on-surface-variant">Por segurança, você será desconectado em <strong class="text-fg-primary">{{ idle.secondsLeft() }}s</strong> por falta de atividade.</p>
+            </div>
+          </div>
+          <div class="flex flex-col-reverse sm:flex-row sm:justify-end gap-space-xs">
+            <button type="button" class="adm-btn-ghost" (click)="idle.logoutNow()">Sair agora</button>
+            <button type="button" class="adm-btn-primary" (click)="idle.keepAlive()">Continuar conectado</button>
+          </div>
+        </div>
+      </div>
+    }
+
+    <main class="min-h-screen bg-surface pt-16 lg:pt-0 lg:pl-[248px]" [attr.inert]="idle.secondsLeft() !== null ? '' : null">
       <router-outlet />
     </main>
   `,
 })
 export class AdminShellComponent {
   readonly auth = inject(AdminAuthService);
+  readonly idle = inject(AdminIdleService);
   readonly loading = inject(LoadingService);
   readonly toast = inject(ToastService);
   readonly theme = inject(ThemeService);

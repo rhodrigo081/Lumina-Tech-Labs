@@ -1,16 +1,5 @@
 import { INFRA_OPTIONS } from './infrastructure';
 
-/**
- * Estrutura do relatório em texto devolvido por GET /leads/{id}/report:
- *
- *   TÍTULO
- *   Chave: valor            (metadados, até a primeira linha em branco)
- *
- *   SEÇÃO EM MAIÚSCULAS
- *     Rótulo:   valor       (linhas indentadas)
- *
- *   Parágrafo livre        (observações)
- */
 export interface ReportRow { label: string; value: string; }
 export interface ReportSection { key: string; title: string; rows: ReportRow[]; }
 export interface ParsedReport { title: string; meta: ReportRow[]; sections: ReportSection[]; notes: string[]; }
@@ -29,7 +18,6 @@ const isHeading = (line: string) => /[A-ZÀ-Ý]/.test(line) && line === line.toU
 
 const titleCase = (s: string) => s.charAt(0) + s.slice(1).toLowerCase();
 
-/** Devolve null quando o texto não segue o formato esperado (a tela mostra o texto puro). */
 export function parseReportText(text: string | undefined | null): ParsedReport | null {
   if (!text?.trim()) return null;
   const blocks = text.replace(/\r\n/g, '\n').split(/\n\s*\n/).map((b) => b.split('\n').filter((l) => l.trim()));

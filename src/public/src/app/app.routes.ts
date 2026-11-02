@@ -4,7 +4,6 @@ import { reportFlowGuard } from './core/guards';
 import { adminGuard, adminLoginGuard } from './core/admin/admin.guards';
 
 export const routes: Routes = [
-  // Área administrativa: layout próprio, fora do funil público.
   { path: 'admin/login', title: 'Lumina Tech Labs — Entrar', canActivate: [adminLoginGuard], loadComponent: () => import('./pages/admin/admin-login.page').then((m) => m.AdminLoginPage) },
   {
     path: 'admin',

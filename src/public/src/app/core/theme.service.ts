@@ -4,10 +4,6 @@ export type ThemeMode = 'light' | 'dark';
 
 const KEY = 'ecm.theme';
 
-/**
- * Tema claro/escuro.
- * A escolha manual fica salva no navegador.
- */
 @Injectable({ providedIn: 'root' })
 export class ThemeService {
   readonly mode = signal<ThemeMode>(this.read());
@@ -26,11 +22,9 @@ export class ThemeService {
     try {
       localStorage.setItem(KEY, mode);
     } catch {
-      /* storage indisponível */
     }
   }
 
-  /** Alterna entre tema claro e escuro. */
   cycle(): void {
     this.set(this.mode() === 'dark' ? 'light' : 'dark');
   }
@@ -43,10 +37,8 @@ export class ThemeService {
         return value;
       }
     } catch {
-      /* ignora */
     }
 
     return 'light';
   }
 }
-

@@ -1,33 +1,16 @@
-# ==========================================
-# Multi-stage Build para o Backend Euditoria
-# ==========================================
+# syntax=docker/dockerfile:1
 FROM maven:3.9-eclipse-temurin-21-alpine AS builder
-
 WORKDIR /build
-
-# Cache de dependências do Maven
 COPY pom.xml .
-RUN mvn dependency:go-offline -B
-
-# Compilação do código fonte
+RUN mvn -B -q dependency:go-offline
 COPY src ./src
-RUN mvn clean package -DskipTests -B
+RUN mvn -B -q package -DskipTests
 
-# ==========================================
-# Imagem de Execução (Runtime Seguro)
-# ==========================================
-FROM eclipse-temurin:21-jre-alpine AS runner
-
+FROM eclipse-temurin:21-jre-alpine
 WORKDIR /app
-
-# Usuário não-root para segurança corporativa
-RUN addgroup -S lumina-tech-labs && adduser -S lumina-tech-labs -G lumina-tech-labs
-
-COPY --from=builder --chown=lumina-tech-labs:lumina-tech-labs /build/target/*.jar app.jar
-
-USER lumina-tech-labs
-
+RUN addgroup -S lumina && adduser -S lumina -G lumina
+COPY --from=builder --chown=lumina:lumina /build/target/*.jar app.jar
+USER lumina
 EXPOSE 8080
-
-# Parâmetros otimizados de JVM para containers
-ENTRYPOINT ["java", "-XX:+UseContainerSupport", "-XX:MaxRAMPercentage=75.0", "-Djava.security.egd=file:/dev/./urandom", "-jar", "app.jar"]
+ENV JAVA_OPTS="-XX:MaxRAMPercentage=75.0 -XX:+ExitOnOutOfMemoryError"
+ENTRYPOINT ["sh", "-c", "exec java $JAVA_OPTS -jar app.jar"]

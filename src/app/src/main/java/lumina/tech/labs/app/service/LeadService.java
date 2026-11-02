@@ -15,19 +15,15 @@ import lumina.tech.labs.app.exception.DuplicateLeadException;
 import lumina.tech.labs.app.exception.LeadNotFoundException;
 import lumina.tech.labs.app.repository.CompanyRepository;
 import lumina.tech.labs.app.repository.LeadRepository;
+import lumina.tech.labs.app.exception.ApiException;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.UUID;
 
-/**
- * Orchestrates FR01.3 + FR03.1-03.2: everything inside {@link #captureLead}
- * runs in a SINGLE transaction (Lead + Diagnostic + ConsentLog + Company),
- * matching the "lead-module" boundary from the design doc. Notification and
- * CRM sync are explicitly OUTSIDE this transaction — they only run after
- * a successful commit, via the LeadQualifiedEvent listeners.
- */
 @Service
 public class LeadService {
 
@@ -38,6 +34,7 @@ public class LeadService {
     private final LeadMapper leadMapper;
     private final IdempotencyService idempotencyService;
     private final ApplicationEventPublisher eventPublisher;
+    private final String currentTermVersion;
 
     public LeadService(LeadRepository leadRepository,
                         CompanyRepository companyRepository,
@@ -45,7 +42,9 @@ public class LeadService {
                         ScoringEngine scoringEngine,
                         LeadMapper leadMapper,
                         IdempotencyService idempotencyService,
-                        ApplicationEventPublisher eventPublisher) {
+                        ApplicationEventPublisher eventPublisher,
+                        @Value("${lumina.consent.term-version:v1.0}") String currentTermVersion) {
+        this.currentTermVersion = currentTermVersion;
         this.leadRepository = leadRepository;
         this.companyRepository = companyRepository;
         this.diagnosticCalculationStrategy = diagnosticCalculationStrategy;
@@ -61,10 +60,14 @@ public class LeadService {
         if (idempotencyKey != null) {
             IdempotencyService.Result idempotency = idempotencyService.begin("lead", idempotencyKey);
             if (idempotency.completedResourceId().isPresent()) {
-                // Same key already succeeded (e.g. the client retried after a timeout): replay it.
                 return toResponse(getLeadOrThrow(idempotency.completedResourceId().get()));
             }
             reservation = idempotency.reservation();
+        }
+
+        if (!currentTermVersion.equals(request.consent().termVersion())) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "TERMS_VERSION_MISMATCH",
+                    "The terms of use were updated. Reload the page and accept the current version.");
         }
 
         String email = request.corporateEmail().trim().toLowerCase();
@@ -74,7 +77,6 @@ public class LeadService {
 
         Company company = findOrCreateCompany(request.companyName(), extractDomain(email));
 
-        // --- Diagnostic: map raw input, then fill in the calculated fields ---
         Diagnostic diagnostic = leadMapper.toEntity(request.diagnostic());
         DiagnosticEstimate estimate = diagnosticCalculationStrategy.calculate(request.diagnostic());
         diagnostic.setConsumptionReductionPct(estimate.consumptionReductionPct());
@@ -82,7 +84,6 @@ public class LeadService {
         diagnostic.setPaybackMonths(estimate.paybackMonths());
         diagnostic.setCo2ReductionTons(estimate.co2ReductionTons());
 
-        // --- Lead: assign company, priority (FR03.2), and link Diagnostic (1:1) ---
         Lead lead = Lead.builder()
                 .company(company)
                 .fullName(request.fullName().trim())
@@ -91,24 +92,19 @@ public class LeadService {
                 .jobTitle(request.jobTitle().trim())
                 .priority(scoringEngine.score(request.diagnostic()))
                 .build();
-        lead.assignDiagnostic(diagnostic); // sets both sides: lead.diagnostic and diagnostic.lead
+        lead.assignDiagnostic(diagnostic);
 
-        // --- Consent (RNF2.1): appended via the Lead's convenience method, never built standalone ---
         ConsentLog consent = ConsentLog.builder()
                 .termVersion(request.consent().termVersion())
                 .sourceIp(sourceIp)
                 .build();
         lead.addConsentLog(consent);
 
-        // cascade = ALL on Lead.diagnostic/consentLogs persists both in this single INSERT batch.
-        // saveAndFlush: constraint violations surface HERE (inside the transaction) instead of at commit.
         Lead saved = leadRepository.saveAndFlush(lead);
         if (reservation != null) {
             reservation.complete(saved.getId());
         }
 
-        // Published now, but only actually delivered to listeners AFTER this @Transactional
-        // method commits (see NotificationEventListener / CrmSyncEventListener, phase = AFTER_COMMIT).
         eventPublisher.publishEvent(new LeadQualifiedEvent(saved.getId(), saved.getPriority()));
 
         return toResponse(saved);
@@ -129,7 +125,6 @@ public class LeadService {
 
     private Company findOrCreateCompany(String companyName, String emailDomain) {
         if (EmailDomains.isPersonal(emailDomain)) {
-            // gmail.com & co. say nothing about the employer: never group these leads.
             return companyRepository.save(Company.builder().name(companyName.trim()).emailDomain(emailDomain).build());
         }
         return companyRepository.findFirstByEmailDomainOrderByCreatedAtAsc(emailDomain)

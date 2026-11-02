@@ -2,12 +2,13 @@ import { CurrencyPipe, DecimalPipe } from '@angular/common';
 import { Component, OnInit, inject, input, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { AdminApiService } from '../../core/admin/admin-api.service';
-import { AdminLeadDetail, MEETING_LABEL, PRIORITY_LABEL, Priority } from '../../core/admin/admin.models';
+import { AdminLeadDetail, MEETING_LABEL, PRIORITY_LABEL } from '../../core/admin/admin.models';
 import { dateTimeOf, timeOf } from '../../core/datetime';
 import { friendly } from '../../core/errors';
 import { INFRA_OPTIONS } from '../../core/infrastructure';
 import { ApiError } from '../../core/models';
 import { ToastService } from '../../core/state.services';
+import { ConfirmService } from '../../shared/confirm-dialog.component';
 
 @Component({
   selector: 'ecm-admin-lead-detail',
@@ -42,7 +43,6 @@ import { ToastService } from '../../core/state.services';
 
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-space-lg items-start">
           <div class="lg:col-span-2 flex flex-col gap-space-lg">
-            <!-- Contato -->
             <section class="adm-card flex flex-col gap-space-md" aria-labelledby="contact-h">
               <h2 id="contact-h" class="font-headline-sm text-headline-sm text-fg-primary font-bold">Contato</h2>
               <dl class="grid grid-cols-1 sm:grid-cols-2 gap-space-md">
@@ -55,7 +55,6 @@ import { ToastService } from '../../core/state.services';
               </dl>
             </section>
 
-            <!-- Diagnóstico -->
             @if (l.diagnostic; as d) {
               <section class="adm-card flex flex-col gap-space-md" aria-labelledby="diag-h">
                 <h2 id="diag-h" class="font-headline-sm text-headline-sm text-fg-primary font-bold">Diagnóstico</h2>
@@ -78,7 +77,6 @@ import { ToastService } from '../../core/state.services';
               </section>
             }
 
-            <!-- Auditoria -->
             <section class="adm-card flex flex-col gap-space-md" aria-labelledby="audit-h">
               <h2 id="audit-h" class="font-headline-sm text-headline-sm text-fg-primary font-bold">Consentimento e CRM</h2>
               <div class="flex flex-col gap-space-xs">
@@ -99,7 +97,6 @@ import { ToastService } from '../../core/state.services';
             </section>
           </div>
 
-          <!-- Reunião -->
           <aside class="adm-card flex flex-col gap-space-md lg:sticky lg:top-6" aria-labelledby="meeting-h">
             <h2 id="meeting-h" class="font-headline-sm text-headline-sm text-fg-primary font-bold flex items-center gap-2">
               <span class="material-symbols-outlined text-[22px]" aria-hidden="true">event</span>Reunião
@@ -117,13 +114,12 @@ import { ToastService } from '../../core/state.services';
               </dl>
               @if (m.status === 'SCHEDULED') {
                 <div class="flex flex-col gap-space-xs pt-space-xs">
-                  <button type="button" class="adm-btn-ghost" [disabled]="busy()" (click)="setStatus(m.id, 'COMPLETED')">
+                  <button type="button" class="adm-btn-ghost" [disabled]="busy()" (click)="complete(m.id)">
                     <span class="material-symbols-outlined text-[18px]" aria-hidden="true">task_alt</span>Marcar como realizada
                   </button>
                   <button type="button" class="adm-btn-danger" [disabled]="busy()" (click)="cancel(m.id)">
-                    <span class="material-symbols-outlined text-[18px]" aria-hidden="true">event_busy</span>{{ confirmCancel() ? 'Confirmar cancelamento' : 'Cancelar reunião' }}
+                    <span class="material-symbols-outlined text-[18px]" aria-hidden="true">event_busy</span>Cancelar reunião
                   </button>
-                  @if (confirmCancel()) { <p class="font-body-sm text-body-sm text-on-surface-variant">O horário volta a ficar livre e o lead recebe um e-mail para reagendar.</p> }
                 </div>
               }
             } @else {
@@ -139,6 +135,7 @@ export class AdminLeadDetailPage implements OnInit {
   readonly id = input.required<string>();
   private readonly api = inject(AdminApiService);
   private readonly toast = inject(ToastService);
+  private readonly confirm = inject(ConfirmService);
 
   readonly priorityLabel = PRIORITY_LABEL;
   readonly meetingLabel = MEETING_LABEL;
@@ -148,8 +145,6 @@ export class AdminLeadDetailPage implements OnInit {
   readonly lead = signal<AdminLeadDetail | null>(null);
   readonly error = signal<{ title: string; message: string } | null>(null);
   readonly busy = signal(false);
-  readonly confirmCancel = signal(false);
-  private confirmTimer?: ReturnType<typeof setTimeout>;
 
   ngOnInit() { this.load(); }
 
@@ -163,19 +158,24 @@ export class AdminLeadDetailPage implements OnInit {
 
   infraLabel(code: string) { return INFRA_OPTIONS.find((o) => o.code === code)?.label ?? code; }
 
-  /** Cancelamento em dois cliques (o segundo confirma), sem diálogo modal. */
-  cancel(scheduleId: string) {
-    if (!this.confirmCancel()) {
-      this.confirmCancel.set(true);
-      clearTimeout(this.confirmTimer);
-      this.confirmTimer = setTimeout(() => this.confirmCancel.set(false), 6000);
-      return;
-    }
-    this.confirmCancel.set(false);
-    this.setStatus(scheduleId, 'CANCELLED');
+  async cancel(scheduleId: string) {
+    const ok = await this.confirm.ask({
+      title: 'Cancelar esta reunião?', danger: true, confirmLabel: 'Cancelar reunião', cancelLabel: 'Manter reunião',
+      message: 'O horário volta a ficar livre e o lead recebe um e-mail para reagendar. Esta ação não pode ser desfeita.',
+    });
+    if (ok) this.setStatus(scheduleId, 'CANCELLED');
   }
 
-  setStatus(scheduleId: string, status: 'CANCELLED' | 'COMPLETED') {
+  async complete(scheduleId: string) {
+    const ok = await this.confirm.ask({
+      title: 'Marcar como realizada?', confirmLabel: 'Marcar como realizada',
+      message: 'A reunião passa para o status "Realizada" e não poderá mais ser cancelada.',
+    });
+    if (ok) this.setStatus(scheduleId, 'COMPLETED');
+  }
+
+  private setStatus(scheduleId: string, status: 'CANCELLED' | 'COMPLETED') {
+    if (this.busy()) return;
     this.busy.set(true);
     this.api.setMeetingStatus(scheduleId, status).subscribe({
       next: () => {

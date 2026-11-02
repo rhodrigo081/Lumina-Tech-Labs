@@ -18,7 +18,6 @@ interface DayView { key: string; weekday: string; day: string; slots: SlotView[]
   imports: [RouterLink, CurrencyPipe, DecimalPipe, ErrorCardComponent, LoadingButtonComponent],
   template: `
     @if (!report()) {
-      <!-- Sem diagnóstico não há lead: o backend exige o leadId para agendar -->
       <div class="max-w-[720px] mx-auto px-gutter py-space-xl">
         <ecm-error-card badge="Antes de agendar" code="" icon="calculate" tone="neutral"
           title="Faça o diagnóstico para agendar a reunião"
@@ -43,7 +42,6 @@ interface DayView { key: string; weekday: string; day: string; slots: SlotView[]
       </div>
 
       <div class="grid grid-cols-1 xl:grid-cols-12 gap-space-lg items-start">
-        <!-- ESQUERDA -->
         <div class="xl:col-span-7 flex flex-col gap-space-lg">
           <div class="bg-surface-container-lowest rounded-xl p-space-lg shadow-sm flex flex-col gap-space-md" [attr.aria-busy]="status() === 'loading'">
             <div class="flex items-center justify-between pb-space-xs gap-space-sm flex-wrap">
@@ -158,7 +156,6 @@ interface DayView { key: string; weekday: string; day: string; slots: SlotView[]
           </div>
         </div>
 
-        <!-- DIREITA -->
         <div class="xl:col-span-5 flex flex-col gap-space-lg xl:sticky xl:top-6">
           <div class="bg-surface-container-lowest rounded-xl shadow-md p-space-lg flex flex-col gap-space-md">
             <span class="font-label-mono text-label-mono text-fg-secondary font-bold uppercase tracking-wider">Resumo do agendamento</span>
@@ -220,9 +217,7 @@ export class AgendamentoPage implements OnInit {
   readonly slotsError = signal<ApiError | null>(null);
   readonly slotsMsg = computed<FriendlyError | null>(() => { const e = this.slotsError(); return e ? friendly(e, 'slots') : null; });
   readonly dayK = signal('');
-  /** id do horário escolhido (slot criado pela equipe no painel administrativo). */
   readonly selected = signal('');
-  /** Filtro opcional por técnico ('' = qualquer técnico). */
   readonly technicianFilter = signal('');
   private readonly allSlots = signal<Slot[]>([]);
   readonly technicians = computed<TechnicianOption[]>(() => {
@@ -287,7 +282,6 @@ export class AgendamentoPage implements OnInit {
     if (!day?.slots.some((s) => s.id === this.selected())) this.selected.set('');
   }
 
-  /** Agrupa os horários por dia (em Brasília), ignora horários passados e ordena. */
   private group(slots: Slot[]): DayView[] {
     const now = Date.now();
     const map = new Map<string, DayView>();

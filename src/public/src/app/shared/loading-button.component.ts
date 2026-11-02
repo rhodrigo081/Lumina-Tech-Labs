@@ -1,6 +1,7 @@
-import { Component, input } from '@angular/core';
+import { Component, DestroyRef, effect, inject, input, signal } from '@angular/core';
 
-/** Botão de ação crítica: durante o loading fica desabilitado (trava de idempotência) e anuncia aria-busy. */
+const SLOW_AFTER_MS = 8000;
+
 @Component({
   selector: 'ecm-loading-button',
   template: `
@@ -18,6 +19,12 @@ import { Component, input } from '@angular/core';
         <span>{{ label() }}</span>
       }
     </button>
+    @if (slow()) {
+      <p class="mt-2 font-body-sm text-body-sm text-on-surface-variant flex items-center gap-1.5" role="status">
+        <span class="material-symbols-outlined text-[16px]" aria-hidden="true">hourglass_top</span>
+        A conexão está lenta. Aguarde, não é preciso clicar de novo.
+      </p>
+    }
   `,
 })
 export class LoadingButtonComponent {
@@ -27,4 +34,16 @@ export class LoadingButtonComponent {
   readonly loading = input(false);
   readonly disabled = input(false);
   readonly type = input<'button' | 'submit'>('button');
+
+  readonly slow = signal(false);
+  private slowTimer?: ReturnType<typeof setTimeout>;
+
+  constructor() {
+    effect(() => {
+      clearTimeout(this.slowTimer);
+      if (this.loading()) this.slowTimer = setTimeout(() => this.slow.set(true), SLOW_AFTER_MS);
+      else this.slow.set(false);
+    });
+    inject(DestroyRef).onDestroy(() => clearTimeout(this.slowTimer));
+  }
 }

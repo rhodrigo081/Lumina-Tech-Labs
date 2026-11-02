@@ -22,7 +22,6 @@ import { ApiError } from '../../core/models';
         <p class="font-body-md text-body-md text-on-surface-variant">Diagnósticos recebidos pelo site, com prioridade e situação do agendamento.</p>
       </header>
 
-      <!-- Indicadores -->
       <section class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-space-sm" aria-label="Indicadores">
         @for (k of kpis(); track k.label) {
           <div class="adm-card !p-space-md flex flex-col gap-1">
@@ -35,13 +34,12 @@ import { ApiError } from '../../core/models';
         }
       </section>
 
-      <!-- Filtros -->
       <section class="adm-card !p-space-md flex flex-col lg:flex-row gap-space-sm lg:items-end" aria-label="Filtros">
         <div class="flex flex-col gap-1 flex-1 min-w-0">
           <label for="f-search" class="adm-label">Buscar</label>
           <div class="relative">
             <span class="material-symbols-outlined absolute left-3 top-2.5 text-[20px] text-on-surface-variant" aria-hidden="true">search</span>
-            <input id="f-search" type="search" class="adm-input pl-10" placeholder="Nome, e-mail ou empresa" [value]="filters().search ?? ''"
+            <input id="f-search" type="search" maxlength="100" autocomplete="off" class="adm-input pl-10" placeholder="Nome, e-mail ou empresa" [value]="filters().search ?? ''"
               (input)="search$.next($any($event.target).value)" />
           </div>
         </div>
@@ -65,7 +63,6 @@ import { ApiError } from '../../core/models';
         }
       </section>
 
-      <!-- Lista -->
       <section class="adm-card !p-0 overflow-hidden" aria-label="Lista de leads" [attr.aria-busy]="loading()">
         @if (error(); as e) {
           <div class="p-space-lg flex flex-col items-start gap-space-sm" role="alert">
@@ -85,7 +82,6 @@ import { ApiError } from '../../core/models';
           </div>
         } @else {
           @let p = page()!;
-          <!-- Tabela (telas médias e grandes) -->
           <div class="hidden md:block overflow-x-auto">
             <table class="w-full">
               <thead class="bg-surface-container-low">
@@ -113,7 +109,6 @@ import { ApiError } from '../../core/models';
               </tbody>
             </table>
           </div>
-          <!-- Cartões (celular) -->
           <ul class="md:hidden flex flex-col">
             @for (l of p.content; track l.id) {
               <li class="border-t border-outline-variant/40 first:border-t-0">
@@ -183,13 +178,12 @@ export class AdminLeadsPage implements OnInit {
   }
 
   ngOnInit() {
-    // Os filtros ficam na URL: voltar do detalhe mantém a mesma busca e página.
     const q = this.route.snapshot.queryParamMap;
     this.filters.set({
       search: q.get('search') ?? '', priority: (q.get('priority') as Priority) ?? '',
       scheduled: (q.get('scheduled') as 'true' | 'false') ?? '', page: Number(q.get('page') ?? 0) || 0,
     });
-    this.api.dashboard().subscribe({ next: (d) => this.dashboard.set(d), error: () => { /* indicadores são opcionais */ } });
+    this.api.dashboard().subscribe({ next: (d) => this.dashboard.set(d), error: () => { } });
     this.load();
   }
 

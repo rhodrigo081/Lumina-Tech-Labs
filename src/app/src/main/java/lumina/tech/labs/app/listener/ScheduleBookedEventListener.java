@@ -8,12 +8,6 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
 
-/**
- * After a booking commits: creates the calendar event and sends the
- * confirmations. Doing the calendar call here (and not inside the booking
- * transaction) means a failed INSERT can no longer leave an orphan event
- * in the technician's calendar.
- */
 @Component
 public class ScheduleBookedEventListener {
 

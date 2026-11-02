@@ -1,6 +1,5 @@
 import { Component, input } from '@angular/core';
 
-/** Cartão de erro contextual: badge HTTP + código + título + explicação, com corpo e ações projetados. */
 @Component({
   selector: 'ecm-error-card',
   template: `

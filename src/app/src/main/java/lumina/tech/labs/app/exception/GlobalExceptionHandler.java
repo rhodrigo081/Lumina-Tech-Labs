@@ -1,6 +1,7 @@
 package lumina.tech.labs.app.exception;
 
 import jakarta.servlet.http.HttpServletRequest;
+import lumina.tech.labs.app.config.RequestIdFilter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -10,6 +11,7 @@ import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.validation.FieldError;
+import org.springframework.web.HttpMediaTypeNotSupportedException;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingRequestHeaderException;
@@ -30,6 +32,11 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(ApiException.class)
     public ResponseEntity<ApiErrorResponse> handleApi(ApiException ex, HttpServletRequest request) {
+        if (ex.getStatus().is5xxServerError()) {
+            log.error("{} on {} {}: {}", ex.getCode(), request.getMethod(), request.getRequestURI(), ex.getMessage(), ex);
+        } else {
+            log.info("{} {} -> {} {}", request.getMethod(), request.getRequestURI(), ex.getStatus().value(), ex.getCode());
+        }
         return build(ex.getStatus(), ex.getCode(), ex.getMessage(), request, null);
     }
 
@@ -39,6 +46,8 @@ public class GlobalExceptionHandler {
         List<ApiErrorResponse.FieldError> fieldErrors = ex.getBindingResult().getFieldErrors().stream()
                 .map(fe -> new ApiErrorResponse.FieldError(fe.getField(), safeMessage(fe)))
                 .toList();
+        log.info("{} {} -> 400 VALIDATION_FAILED on fields {}", request.getMethod(), request.getRequestURI(),
+                fieldErrors.stream().map(ApiErrorResponse.FieldError::field).toList());
         return build(HttpStatus.BAD_REQUEST, "VALIDATION_FAILED", "Validation failed", request, fieldErrors);
     }
 
@@ -54,16 +63,17 @@ public class GlobalExceptionHandler {
         return build(HttpStatus.BAD_REQUEST, "VALIDATION_FAILED", "Validation failed", request, fieldErrors);
     }
 
-    /** Malformed JSON, wrong types inside the body, unparseable dates, etc. */
     @ExceptionHandler(HttpMessageNotReadableException.class)
     public ResponseEntity<ApiErrorResponse> handleUnreadable(HttpMessageNotReadableException ex, HttpServletRequest request) {
+        log.info("{} {} -> 400 MALFORMED_REQUEST: {}", request.getMethod(), request.getRequestURI(), ex.getMostSpecificCause().getMessage());
         return build(HttpStatus.BAD_REQUEST, "MALFORMED_REQUEST", "Request body is missing or malformed", request, null);
     }
 
     @ExceptionHandler({MissingServletRequestParameterException.class, MethodArgumentTypeMismatchException.class,
             MissingRequestHeaderException.class})
     public ResponseEntity<ApiErrorResponse> handleBadParameter(Exception ex, HttpServletRequest request) {
-        return build(HttpStatus.BAD_REQUEST, "INVALID_PARAMETER", ex.getMessage(), request, null);
+        log.info("{} {} -> 400 INVALID_PARAMETER: {}", request.getMethod(), request.getRequestURI(), ex.getMessage());
+        return build(HttpStatus.BAD_REQUEST, "INVALID_PARAMETER", "Invalid or missing request parameter", request, null);
     }
 
     @ExceptionHandler(NoResourceFoundException.class)
@@ -73,13 +83,14 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
     public ResponseEntity<ApiErrorResponse> handleMethod(HttpRequestMethodNotSupportedException ex, HttpServletRequest request) {
-        return build(HttpStatus.METHOD_NOT_ALLOWED, "METHOD_NOT_ALLOWED", ex.getMessage(), request, null);
+        return build(HttpStatus.METHOD_NOT_ALLOWED, "METHOD_NOT_ALLOWED", "Method not allowed", request, null);
     }
 
-    /**
-     * Unique-constraint races (two submits with the same email, two companies
-     * with the same domain created concurrently...) are conflicts, not 500s.
-     */
+    @ExceptionHandler(HttpMediaTypeNotSupportedException.class)
+    public ResponseEntity<ApiErrorResponse> handleMediaType(HttpMediaTypeNotSupportedException ex, HttpServletRequest request) {
+        return build(HttpStatus.UNSUPPORTED_MEDIA_TYPE, "UNSUPPORTED_MEDIA_TYPE", "Unsupported content type", request, null);
+    }
+
     @ExceptionHandler(DataIntegrityViolationException.class)
     public ResponseEntity<ApiErrorResponse> handleIntegrity(DataIntegrityViolationException ex, HttpServletRequest request) {
         log.warn("Data integrity violation on {}: {}", request.getRequestURI(), ex.getMostSpecificCause().getMessage());
@@ -109,7 +120,7 @@ public class GlobalExceptionHandler {
     private ResponseEntity<ApiErrorResponse> build(HttpStatus status, String code, String message, HttpServletRequest request,
                                                     List<ApiErrorResponse.FieldError> fieldErrors) {
         ApiErrorResponse body = new ApiErrorResponse(Instant.now(), status.value(), status.getReasonPhrase(), code,
-                message, request.getRequestURI(), fieldErrors);
+                message, request.getRequestURI(), fieldErrors, RequestIdFilter.current(request));
         return ResponseEntity.status(status).body(body);
     }
 }

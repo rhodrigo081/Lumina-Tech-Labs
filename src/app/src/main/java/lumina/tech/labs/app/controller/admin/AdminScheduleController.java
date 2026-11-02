@@ -28,7 +28,6 @@ public class AdminScheduleController {
         this.scheduleService = scheduleService;
     }
 
-    /** Every slot (open and booked) between `from` and `to` (ISO-8601 instants, max 62 days). */
     @GetMapping("/slots")
     public List<AdminSlotResponse> slots(@RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant from,
                                          @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant to,
@@ -48,7 +47,6 @@ public class AdminScheduleController {
         adminSlotService.delete(id);
     }
 
-    /** CANCELLED frees the slot for other leads; COMPLETED closes the meeting. */
     @PatchMapping("/schedules/{id}/status")
     public ScheduleResponse updateMeetingStatus(@PathVariable UUID id, @Valid @RequestBody ScheduleStatusRequest request) {
         return scheduleService.updateStatus(id, request.status());

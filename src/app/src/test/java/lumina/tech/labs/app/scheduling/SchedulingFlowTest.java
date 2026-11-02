@@ -9,7 +9,7 @@ import lumina.tech.labs.app.enums.Priority;
 import lumina.tech.labs.app.enums.ScheduleStatus;
 import lumina.tech.labs.app.enums.SlotStatus;
 import lumina.tech.labs.app.exception.ApiException;
-import lumina.tech.labs.app.integration.JitsiMeetingProvider;
+import lumina.tech.labs.app.integration.MeetingProvider;
 import lumina.tech.labs.app.mapper.LeadMapperImpl;
 import lumina.tech.labs.app.model.AvailabilitySlot;
 import lumina.tech.labs.app.model.Company;
@@ -38,28 +38,27 @@ import java.math.BigDecimal;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
-import java.util.List;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.BDDMockito.given;
 
-/**
- * Exercises the JPA mappings, every custom JPQL query and the booking rules
- * against a real (in-memory) database — no Docker needed. Flyway is off here
- * (the migrations are PostgreSQL-specific); the schema comes from the entities.
- */
 @DataJpaTest
 @TestPropertySource(properties = {
         "spring.flyway.enabled=false",
         "spring.jpa.hibernate.ddl-auto=create-drop"
 })
 @Import({ScheduleService.class, AdminLeadService.class, AdminSlotService.class, TechnicianService.class,
-        LeadMapperImpl.class, JitsiMeetingProvider.class})
+        LeadMapperImpl.class})
 class SchedulingFlowTest {
 
     @MockitoBean
     NotificationService notificationService;
+
+    @MockitoBean
+    MeetingProvider meetingProvider;
 
     @Autowired ScheduleService scheduleService;
     @Autowired AdminLeadService adminLeadService;
@@ -78,6 +77,8 @@ class SchedulingFlowTest {
 
     @BeforeEach
     void setUp() {
+        given(meetingProvider.create(any())).willReturn(
+                new MeetingProvider.Meeting("event-1", "https://meet.google.com/abc-defg-hij"));
         ana = technicianRepository.save(Technician.builder().name("Ana Souza").email("ana@lumina.tech").specialty("HVAC").build());
         bruno = technicianRepository.save(Technician.builder().name("Bruno Lima").email("bruno@lumina.tech").build());
 
@@ -109,7 +110,7 @@ class SchedulingFlowTest {
         assertThat(response.technicianName()).isEqualTo("Ana Souza");
         assertThat(response.meetingTime()).isEqualTo(anaTomorrow.getStartTime());
         assertThat(response.endTime()).isEqualTo(anaTomorrow.getEndTime());
-        assertThat(response.videoLink()).matches("https://meet\\.jit\\.si/LuminaTechLabs-[a-z2-9]{20}");
+        assertThat(response.videoLink()).isEqualTo("https://meet.google.com/abc-defg-hij");
         assertThat(slotRepository.findById(anaTomorrow.getId()).orElseThrow().getStatus()).isEqualTo(SlotStatus.BOOKED);
         assertThat(scheduleService.getAvailableSlots(null)).extracting(ScheduleSlotResponse::id)
                 .doesNotContain(anaTomorrow.getId());

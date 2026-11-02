@@ -9,13 +9,6 @@ import org.hibernate.annotations.CreationTimestamp;
 import java.time.Instant;
 import java.util.UUID;
 
-/**
- * Relationship: CRM_SYNC_LOG (N) -> (1) LEAD — OWNING side.
- * Deliberately NOT unique on lead_id: a single Lead can have multiple
- * rows here (e.g. one PENDING, one FAILURE from a timeout, one SUCCESS
- * after retry) — this table is an audit trail of the Outbox worker,
- * not a 1:1 status flag.
- */
 @Entity
 @Table(name = "crm_sync_log")
 @Getter
@@ -50,6 +43,4 @@ public class CrmSyncLog {
     @CreationTimestamp
     @Column(name = "synced_at", updatable = false)
     private Instant syncedAt;
-
-
 }

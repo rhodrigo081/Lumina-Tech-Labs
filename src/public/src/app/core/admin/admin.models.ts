@@ -1,5 +1,3 @@
-/** Contratos de /api/v1/admin (ver controllers em lumina.tech.labs.app.controller.admin). Datas em ISO-8601 UTC. */
-
 export type Priority = 'LOW_PRIORITY' | 'MEDIUM_PRIORITY' | 'HIGH_PRIORITY';
 export type MeetingStatus = 'SCHEDULED' | 'COMPLETED' | 'CANCELLED';
 export type SlotStatus = 'AVAILABLE' | 'BOOKED';
@@ -47,7 +45,6 @@ export interface AdminSlot {
   booking: { scheduleId: string; leadId: string; leadName: string; companyName: string } | null;
 }
 
-/** Horários em Brasília: datas "AAAA-MM-DD", horas "HH:mm". */
 export interface SlotBatchRequest {
   technicianId: string; dates: string[]; startTime: string; endTime: string; durationMinutes: number; breakMinutes: number;
 }

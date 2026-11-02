@@ -4,7 +4,7 @@ import { takeUntilDestroyed, toObservable } from '@angular/core/rxjs-interop';
 import { Router } from '@angular/router';
 import { catchError, debounceTime, filter, map, of, switchMap, tap } from 'rxjs';
 import { ApiService } from '../core/api.service';
-import { INFRA_OPTIONS, isValidInput, validateInput } from '../core/infrastructure';
+import { INFRA_OPTIONS, LIMITS, isValidInput, validateInput } from '../core/infrastructure';
 import { ApiError, DiagnosticInput, DiagnosticResult } from '../core/models';
 import { JourneyStore } from '../core/state.services';
 import { friendly } from '../core/errors';
@@ -32,7 +32,6 @@ import { fmtNum, parseCents } from '../core/utils';
       </div>
     </section>
 
-    <!-- CALCULADORA -->
     <section class="w-full max-w-[1280px] mx-auto px-gutter py-space-md">
       <div class="grid grid-cols-1 xl:grid-cols-12 gap-space-lg items-start">
         <div class="xl:col-span-7 bg-surface-container-lowest rounded-xl shadow-md p-space-lg flex flex-col gap-space-md">
@@ -54,7 +53,7 @@ import { fmtNum, parseCents } from '../core/utils';
               <label for="input-area" class="font-label-lg text-label-lg text-fg-primary font-semibold flex items-center gap-1.5"><span class="material-symbols-outlined text-[18px] text-fg-secondary" aria-hidden="true">straighten</span>Área Útil Climatizada / Operacional</label>
               <span class="font-label-mono text-label-mono text-fg-secondary">Base Cadastral Mín: 200 m²</span>
             </div>
-            <input id="input-area" type="text" inputmode="numeric" [value]="areaText()" (input)="onArea($event)"
+            <input id="input-area" type="text" inputmode="numeric" maxlength="16" autocomplete="off" [value]="areaText()" (input)="onArea($event)"
               class="w-full h-12 px-4 rounded-lg bg-surface-container-low text-fg-primary font-headline-sm font-semibold focus:bg-surface-container-lowest transition-all" />
             <input type="range" min="200" max="15000" step="50" [value]="input().areaM2" (input)="patch({ areaM2: +$any($event.target).value })"
               class="w-full accent-fg-primary cursor-pointer mt-1" aria-label="Ajustar área em metros quadrados" />
@@ -66,7 +65,7 @@ import { fmtNum, parseCents } from '../core/utils';
             <label for="input-people" class="font-label-lg text-label-lg text-fg-primary font-semibold flex items-center gap-1.5"><span class="material-symbols-outlined text-[18px] text-fg-secondary" aria-hidden="true">groups</span>Estações de Trabalho Ativas (Carga Térmica Humana)</label>
             <div class="flex items-center gap-space-xs">
               <button type="button" (click)="people(-10)" aria-label="Diminuir 10 posições" class="w-12 h-12 rounded-lg bg-surface-container hover:bg-surface-container-high flex items-center justify-center text-fg-primary"><span class="material-symbols-outlined text-[20px]">remove</span></button>
-              <input id="input-people" type="number" min="5" max="5000" [value]="input().workstations" (input)="patch({ workstations: Math.max(5, +$any($event.target).value || 5) })"
+              <input id="input-people" type="text" inputmode="numeric" maxlength="6" autocomplete="off" [value]="input().workstations" (input)="onPeople($event)" (blur)="onPeopleBlur($event)" [attr.aria-invalid]="!!errors().workstations"
                 class="flex-1 h-12 px-4 text-center rounded-lg bg-surface-container-low text-fg-primary font-headline-sm font-semibold focus:bg-surface-container-lowest" />
               <button type="button" (click)="people(10)" aria-label="Aumentar 10 posições" class="w-12 h-12 rounded-lg bg-surface-container hover:bg-surface-container-high flex items-center justify-center text-fg-primary"><span class="material-symbols-outlined text-[20px]">add</span></button>
             </div>
@@ -78,7 +77,7 @@ import { fmtNum, parseCents } from '../core/utils';
             <label for="input-bill" class="font-label-lg text-label-lg text-fg-primary font-semibold flex items-center gap-1.5"><span class="material-symbols-outlined text-[18px] text-fg-secondary" aria-hidden="true">receipt_long</span>Custo Médio Mensal com Energia Elétrica (Fatura Concessionária)</label>
             <div class="relative">
               <span class="absolute left-4 top-3 text-fg-secondary font-bold">R$</span>
-              <input id="input-bill" type="text" inputmode="numeric" [value]="billText()" (input)="onBill($event)" [attr.aria-invalid]="!!errors().bill"
+              <input id="input-bill" type="text" inputmode="numeric" maxlength="16" autocomplete="off" [value]="billText()" (input)="onBill($event)" [attr.aria-invalid]="!!errors().bill"
                 class="w-full h-12 pl-12 pr-4 rounded-lg bg-surface-container-low text-fg-primary font-headline-sm font-semibold focus:bg-surface-container-lowest" />
             </div>
             <div class="flex items-center justify-between font-label-mono text-label-mono text-fg-secondary pt-0.5">
@@ -103,7 +102,6 @@ import { fmtNum, parseCents } from '../core/utils';
           </div>
         </div>
 
-        <!-- RESULTADO EM TEMPO REAL -->
         <div class="xl:col-span-5 flex flex-col gap-space-md">
           <div class="bg-surface-container-lowest rounded-xl shadow-xl p-space-lg" [attr.aria-busy]="previewing()" aria-live="polite">
             @if (previewError(); as pe) {
@@ -157,7 +155,7 @@ import { fmtNum, parseCents } from '../core/utils';
                   @if (previewing()) { <span class="sk h-7 w-36 block"></span> } @else { <span class="font-headline-sm text-headline-sm text-fg-primary font-bold">{{ r().co2ReductionTons | number: '1.2-2' }} tCO₂e /ano</span> }
                 </div>
               </div>
-              
+
             </div>
 
             <div class="mt-space-md pt-space-sm">
@@ -205,11 +203,9 @@ export class DiagnosticoPage {
   private readonly api = inject(ApiService);
   private readonly router = inject(Router);
   readonly store = inject(JourneyStore);
-  readonly Math = Math;
   readonly infra = INFRA_OPTIONS;
 
   readonly input = signal<DiagnosticInput>(this.store.input());
-  /** Último cálculo devolvido pelo backend (POST /diagnostics/preview). */
   readonly result = signal<DiagnosticResult | null>(null);
   readonly loading = signal(false);
   readonly error = signal<ApiError | null>(null);
@@ -221,7 +217,6 @@ export class DiagnosticoPage {
   readonly billText = computed(() => fmtNum(this.input().monthlyEnergyBill));
   readonly canGenerate = computed(() => !!this.result() && !this.loading() && !this.error() && isValidInput(this.input()));
 
-  /** Valores zerados só servem de apoio ao template enquanto o skeleton aparece. */
   readonly r = computed<DiagnosticResult>(() => this.result() ?? { ...this.input(), consumptionReductionPct: 0, annualSavings: 0, paybackMonths: 0, co2ReductionTons: 0, calculatedAt: '' });
   readonly monthly = computed(() => this.r().annualSavings / 12);
   readonly annualCost = computed(() => this.r().monthlyEnergyBill * 12);
@@ -239,7 +234,6 @@ export class DiagnosticoPage {
   ];
 
   constructor() {
-    // Estimativa em tempo real: só consulta com parâmetros válidos, com debounce de 300 ms e cancelando consultas antigas.
     toObservable(this.input).pipe(
       filter((i) => isValidInput(i)),
       tap(() => { this.loading.set(true); this.error.set(null); }),
@@ -255,15 +249,27 @@ export class DiagnosticoPage {
   retryPreview() { this.input.update((v) => ({ ...v })); }
 
   patch(p: Partial<DiagnosticInput>) { this.input.update((v) => ({ ...v, ...p })); this.store.input.set(this.input()); }
-  people(d: number) { this.patch({ workstations: Math.max(5, this.input().workstations + d) }); }
-  onArea(e: Event) { const el = e.target as HTMLInputElement; const n = parseCents(el.value); el.value = fmtNum(n) + ' m²'; this.patch({ areaM2: n }); }
-  onBill(e: Event) { const el = e.target as HTMLInputElement; const n = parseCents(el.value); el.value = fmtNum(n); this.patch({ monthlyEnergyBill: n }); }
+  people(d: number) { this.patch({ workstations: this.clampPeople(this.input().workstations + d) }); }
+  onPeople(e: Event) {
+    const el = e.target as HTMLInputElement;
+    const digits = el.value.replace(/\D/g, '');
+    const n = digits ? Math.min(LIMITS.workstations.max, parseInt(digits, 10)) : 0;
+    el.value = digits ? String(n) : '';
+    this.patch({ workstations: n });
+  }
+  onPeopleBlur(e: Event) {
+    const n = this.clampPeople(this.input().workstations);
+    (e.target as HTMLInputElement).value = String(n);
+    this.patch({ workstations: n });
+  }
+  onArea(e: Event) { const el = e.target as HTMLInputElement; const n = Math.min(LIMITS.area.max, parseCents(el.value)); el.value = fmtNum(n) + ' m²'; this.patch({ areaM2: n }); }
+  onBill(e: Event) { const el = e.target as HTMLInputElement; const n = Math.min(LIMITS.bill.max, parseCents(el.value)); el.value = fmtNum(n); this.patch({ monthlyEnergyBill: n }); }
+  private clampPeople(n: number) { return Math.min(LIMITS.workstations.max, Math.max(LIMITS.workstations.min, n || LIMITS.workstations.min)); }
 
-  /** Único ponto de entrada da página de relatório: libera o acesso e segue para o formulário de geração. */
   generate() {
     if (!this.canGenerate()) return;
     this.store.input.set(this.input());
-    this.store.report.set(null); // novo diagnóstico = novo lead
+    this.store.report.set(null);
     this.store.reportRequested.set(true);
     this.router.navigate(['/relatorio']);
   }

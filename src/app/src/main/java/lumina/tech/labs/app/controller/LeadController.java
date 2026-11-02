@@ -35,26 +35,14 @@ public class LeadController {
         this.diagnosticCalculationStrategy = diagnosticCalculationStrategy;
     }
 
-    /**
-     * FR01.3 / FR03.1 — public endpoint. `Idempotency-Key` is optional but
-     * strongly recommended: a retry with the same key replays the original result.
-     */
     @PostMapping("/leads")
     public ResponseEntity<LeadResponse> captureLead(@Valid @RequestBody LeadCaptureRequest request,
                                                     @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
                                                     HttpServletRequest httpRequest) {
-        // getRemoteAddr() already resolves the real client IP: server.forward-headers-strategy=native
-        // makes Tomcat trust X-Forwarded-For ONLY when it comes from an internal proxy (our nginx),
-        // so a visitor can no longer forge the IP recorded in the LGPD consent log.
         LeadResponse response = leadService.captureLead(request, idempotencyKey, httpRequest.getRemoteAddr());
         return ResponseEntity.created(URI.create("/api/v1/leads/" + response.id())).body(response);
     }
 
-    /**
-     * FR01.2 — stateless preview calculation, never persisted, never gated.
-     * Mirrors the client-side estimate so the visitor sees the same numbers
-     * before AND after unlocking the full report.
-     */
     @PostMapping("/diagnostics/preview")
     public ResponseEntity<DiagnosticResponse> previewDiagnostic(@Valid @RequestBody DiagnosticInputRequest request) {
         DiagnosticEstimate estimate = diagnosticCalculationStrategy.calculate(request);
@@ -63,7 +51,6 @@ public class LeadController {
                 estimate.paybackMonths(), estimate.co2ReductionTons()));
     }
 
-    /** FR01.3 — full report as plain text (rendered by the frontend). Public by lead id, per the original spec. */
     @GetMapping("/leads/{id}/report")
     public ResponseEntity<String> downloadReport(@PathVariable UUID id) {
         return ResponseEntity.ok().contentType(TEXT_UTF8).body(reportService.buildTextReport(id));

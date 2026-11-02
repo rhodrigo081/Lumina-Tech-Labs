@@ -7,14 +7,6 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 
-/**
- * Body of POST /api/v1/leads (FR01.3, FR03.1).
- * Combined with the Idempotency-Key HTTP header (not part of the body)
- * to make repeated submissions safe.
- *
- * Every @Size mirrors the column length in V1__init.sql, so oversized input
- * is rejected with a 400 instead of failing the INSERT with a 500.
- */
 public record LeadCaptureRequest(
         @NotBlank(message = "fullName is required")
         @Size(max = 255, message = "fullName must have at most 255 characters")

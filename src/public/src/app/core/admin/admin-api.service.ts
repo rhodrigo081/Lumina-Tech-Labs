@@ -8,7 +8,6 @@ import {
 
 const BASE = `${API_BASE}/admin`;
 
-/** Chamadas da área administrativa (o token é anexado pelo adminAuthInterceptor). */
 @Injectable({ providedIn: 'root' })
 export class AdminApiService {
   private readonly http = inject(HttpClient);

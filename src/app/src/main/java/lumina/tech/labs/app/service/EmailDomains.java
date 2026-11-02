@@ -3,10 +3,6 @@ package lumina.tech.labs.app.service;
 import java.util.Locale;
 import java.util.Set;
 
-/**
- * Personal (free) email providers. Leads may use them, but their domain must not
- * be used to group leads into the same Company.
- */
 public final class EmailDomains {
 
     private static final Set<String> PERSONAL = Set.of(

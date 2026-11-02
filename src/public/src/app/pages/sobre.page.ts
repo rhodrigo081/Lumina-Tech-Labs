@@ -6,7 +6,6 @@ import { RouterLink } from '@angular/router';
   imports: [RouterLink],
   template: `
     <div class="max-w-[1280px] w-full mx-auto px-gutter py-space-xl flex flex-col gap-space-xl">
-      <!-- 1. Quem somos & missão -->
       <header class="grid grid-cols-1 xl:grid-cols-12 gap-space-lg items-center">
         <div class="xl:col-span-7 flex flex-col gap-space-md">
           <span class="font-label-mono text-label-mono text-fg-primary uppercase tracking-widest font-bold">Sobre a Lumina Tech Labs</span>
@@ -24,7 +23,6 @@ import { RouterLink } from '@angular/router';
         </div>
       </header>
 
-      <!-- 2. Cultura & valores -->
       <section aria-labelledby="cultura-h" class="flex flex-col gap-space-lg">
         <div class="max-w-3xl flex flex-col gap-space-xs">
           <span class="font-label-mono text-label-mono text-fg-secondary uppercase tracking-widest">Nossa Cultura</span>
@@ -44,7 +42,6 @@ import { RouterLink } from '@angular/router';
         </div>
       </section>
 
-      <!-- 3. Como trabalhamos -->
       <section aria-labelledby="metodo-h" class="bg-surface-container-low rounded-3xl p-space-lg xl:p-space-xl flex flex-col gap-space-lg">
         <div class="max-w-3xl flex flex-col gap-space-xs">
           <span class="font-label-mono text-label-mono text-fg-secondary uppercase tracking-widest">Metodologia</span>
@@ -65,7 +62,6 @@ import { RouterLink } from '@angular/router';
         </ol>
       </section>
 
-      <!-- CTA -->
       <section class="bg-primary-container text-on-primary rounded-3xl p-space-lg xl:p-space-xl shadow-xl flex flex-col xl:flex-row xl:items-center justify-between gap-space-lg">
         <div class="max-w-2xl flex flex-col gap-space-xs">
           <h2 class="font-headline-md text-headline-md text-on-primary font-bold">Descubra o potencial de economia do seu espaço</h2>

@@ -8,12 +8,6 @@ import org.hibernate.annotations.CreationTimestamp;
 import java.time.Instant;
 import java.util.UUID;
 
-/**
- * A bookable time window of one technician, created by an admin.
- * Booking flips status AVAILABLE -> BOOKED through a conditional UPDATE
- * (see AvailabilitySlotRepository#claim), so two leads can never take the
- * same slot even when they confirm at the same instant.
- */
 @Entity
 @Table(name = "availability_slot", uniqueConstraints = {
         @UniqueConstraint(name = "uk_slot_technician_start", columnNames = {"technician_id", "start_time"})

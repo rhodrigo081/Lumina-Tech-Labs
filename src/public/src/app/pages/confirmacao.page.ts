@@ -1,9 +1,9 @@
 import { CurrencyPipe, DecimalPipe } from '@angular/common';
-import { Component, computed, inject, input, signal } from '@angular/core';
+import { Component, computed, inject, input } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { BookingRecord } from '../core/models';
 import { JourneyStore, ToastService } from '../core/state.services';
-import { addMinutes, brDateOf, compactUtc, dateTimeOf, dayKey, timeOf } from '../core/datetime';
+import { addMinutes, brDateOf, compactUtc, dayKey, timeOf } from '../core/datetime';
 import { whatsappUrl } from '../core/utils';
 import { ErrorCardComponent } from '../shared/error-card.component';
 
@@ -141,12 +141,10 @@ const STATUS: Record<string, string> = { SCHEDULED: 'Agendado', CONFIRMED: 'Conf
   `,
 })
 export class ConfirmacaoPage {
-  /** id da reserva (devolvido pelo backend em POST /schedule/book). */
   readonly protocol = input.required<string>();
   private readonly store = inject(JourneyStore);
   private readonly toast = inject(ToastService);
 
-  /** A API não tem consulta de reserva por id: o comprovante vem da sessão do navegador. */
   readonly b = computed<BookingRecord | null>(() => { const cur = this.store.booking(); return cur && cur.protocol === this.protocol() ? cur : null; });
   readonly report = this.store.report;
   readonly lead = this.store.lead;
@@ -155,13 +153,11 @@ export class ConfirmacaoPage {
   readonly cancelled = computed(() => (this.b()?.status ?? '').toUpperCase() === 'CANCELLED');
   readonly statusLabel = computed(() => STATUS[(this.b()?.status ?? '').toUpperCase()] ?? this.b()?.status ?? '—');
   readonly startTime = computed(() => timeOf(this.b()!.meetingTime));
-  /** Se a reserva não trouxer o horário final, assume 45 minutos (duração padrão das sessões). */
   readonly endIso = computed(() => this.b()!.endTime ?? addMinutes(this.b()!.meetingTime, 45));
   readonly endTime = computed(() => timeOf(this.endIso()));
   readonly dateLabel = computed(() => brDateOf(dayKey(this.b()!.meetingTime)));
   readonly host = computed(() => (this.b()?.videoLink ?? '').replace(/^https?:\/\//, ''));
   readonly initials = computed(() => this.lead().name.trim().split(/\s+/).slice(0, 2).map((p) => p[0]?.toUpperCase() ?? '').join(''));
-  /** Mostra o responsável apenas se vier um nome legível (não um UUID/identificador técnico). */
   readonly responsible = computed(() => { const r = this.b()?.sdrAssigned?.trim(); return r && !UUID.test(r) ? r : null; });
 
   readonly checklist = [

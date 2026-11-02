@@ -8,11 +8,14 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
-import org.springframework.mail.SimpleMailMessage;
+import jakarta.mail.internet.MimeMessage;
+import org.springframework.core.io.ByteArrayResource;
 import org.springframework.mail.javamail.JavaMailSender;
+import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
 
+import java.nio.charset.StandardCharsets;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.Locale;
@@ -24,16 +27,19 @@ public class EmailNotificationService implements NotificationService {
     private static final Logger log = LoggerFactory.getLogger(EmailNotificationService.class);
 
     private final JavaMailSender mailSender;
+    private final PdfReportService pdfReportService;
     private final RestClient restClient;
     private final String salesWebhookUrl;
     private final String mailFrom;
     private final DateTimeFormatter meetingFormat;
 
     public EmailNotificationService(JavaMailSender mailSender,
+                                    PdfReportService pdfReportService,
                                     @Value("${lumina.notification.sales-webhook-url:}") String salesWebhookUrl,
                                     @Value("${lumina.notification.mail-from}") String mailFrom,
                                     @Value("${lumina.scheduling.zone:America/Sao_Paulo}") ZoneId zone) {
         this.mailSender = mailSender;
+        this.pdfReportService = pdfReportService;
         this.restClient = RestClient.create();
         this.salesWebhookUrl = salesWebhookUrl;
         this.mailFrom = mailFrom;
@@ -46,7 +52,8 @@ public class EmailNotificationService implements NotificationService {
         sendMail(lead.getCorporateEmail(), "Seu diagnóstico energético Lumina Tech Labs",
                 "Olá, " + lead.getFullName() + ".\n\n"
                         + "Recebemos o seu diagnóstico. O relatório completo está disponível na página do diagnóstico, "
-                        + "e você já pode agendar uma sessão técnica com a nossa equipe.\n\nLumina Tech Labs");
+                        + "e você já pode agendar uma sessão técnica com a nossa equipe.\n\nLumina Tech Labs",
+                reportAttachment(lead));
 
         if (lead.getPriority() == Priority.HIGH_PRIORITY) {
             notifySalesChannel(lead);
@@ -86,8 +93,6 @@ public class EmailNotificationService implements NotificationService {
             return;
         }
         try {
-            // Map body + explicit JSON content type: names with quotes no longer break the payload,
-            // and toBodilessEntity() is what actually executes the request.
             restClient.post()
                     .uri(salesWebhookUrl)
                     .contentType(MediaType.APPLICATION_JSON)
@@ -96,20 +101,40 @@ public class EmailNotificationService implements NotificationService {
                     .toBodilessEntity();
         } catch (Exception ex) {
             log.warn("Failed to notify sales channel for lead {}: {}", lead.getId(), ex.getMessage());
-            // Never propagate — a Slack/Teams outage must not fail lead capture (NFR3.2).
+        }
+    }
+
+    private Attachment reportAttachment(Lead lead) {
+        try {
+            return new Attachment(PdfReportService.fileName(lead.getId()), pdfReportService.buildPdfReport(lead.getId()),
+                    "application/pdf");
+        } catch (Exception ex) {
+            log.warn("Could not build the PDF report for lead {}; sending the email without it: {}", lead.getId(), ex.getMessage());
+            return null;
         }
     }
 
     private void sendMail(String to, String subject, String text) {
+        sendMail(to, subject, text, null);
+    }
+
+    private void sendMail(String to, String subject, String text, Attachment attachment) {
         try {
-            SimpleMailMessage message = new SimpleMailMessage();
-            message.setFrom(mailFrom);
-            message.setTo(to);
-            message.setSubject(subject);
-            message.setText(text);
+            MimeMessage message = mailSender.createMimeMessage();
+            MimeMessageHelper helper = new MimeMessageHelper(message, attachment != null, StandardCharsets.UTF_8.name());
+            helper.setFrom(mailFrom);
+            helper.setTo(to);
+            helper.setSubject(subject);
+            helper.setText(text);
+            if (attachment != null) {
+                helper.addAttachment(attachment.fileName(), new ByteArrayResource(attachment.content()), attachment.contentType());
+            }
             mailSender.send(message);
         } catch (Exception ex) {
             log.warn("Failed to send email to {}: {}", to, ex.getMessage());
         }
+    }
+
+    private record Attachment(String fileName, byte[] content, String contentType) {
     }
 }

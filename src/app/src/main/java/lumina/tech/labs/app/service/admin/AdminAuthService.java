@@ -7,6 +7,9 @@ import lumina.tech.labs.app.dto.admin.AdminTokenResponse;
 import lumina.tech.labs.app.exception.ApiException;
 import lumina.tech.labs.app.model.AdminUser;
 import lumina.tech.labs.app.repository.AdminUserRepository;
+import lumina.tech.labs.app.security.TokenRevocationService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.http.HttpStatus;
@@ -25,15 +28,13 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
-/**
- * Email + password login for the admin area. Issues a short-lived HS256 JWT.
- * Failed attempts are counted per email in Redis: after MAX_FAILED_ATTEMPTS
- * the account is locked for LOCK_DURATION (429) to slow down brute force.
- */
 @Service
 public class AdminAuthService {
 
+    private static final Logger log = LoggerFactory.getLogger(AdminAuthService.class);
+
     private static final int MAX_FAILED_ATTEMPTS = 5;
+    private static final int MAX_FAILED_PER_ACCOUNT = 30;
     private static final Duration LOCK_DURATION = Duration.ofMinutes(15);
 
     private final AdminUserRepository adminUserRepository;
@@ -41,14 +42,16 @@ public class AdminAuthService {
     private final JwtEncoder jwtEncoder;
     private final StringRedisTemplate redisTemplate;
     private final Duration tokenTtl;
-    /** Hash compared when the email does not exist, so response time does not reveal valid emails. */
+    private final TokenRevocationService tokenRevocationService;
     private final String dummyHash;
 
     public AdminAuthService(AdminUserRepository adminUserRepository,
                             PasswordEncoder passwordEncoder,
                             JwtEncoder jwtEncoder,
                             StringRedisTemplate redisTemplate,
-                            @Value("${lumina.security.jwt.ttl-minutes:480}") long ttlMinutes) {
+                            TokenRevocationService tokenRevocationService,
+                            @Value("${lumina.security.jwt.ttl-minutes:120}") long ttlMinutes) {
+        this.tokenRevocationService = tokenRevocationService;
         this.adminUserRepository = adminUserRepository;
         this.passwordEncoder = passwordEncoder;
         this.jwtEncoder = jwtEncoder;
@@ -58,12 +61,12 @@ public class AdminAuthService {
     }
 
     @Transactional
-    public AdminTokenResponse login(AdminLoginRequest request) {
+    public AdminTokenResponse login(AdminLoginRequest request, String clientIp) {
         String email = request.email().trim().toLowerCase();
-        String failKey = "admin:login:fail:" + email;
+        String failKey = "admin:login:fail:" + email + ":" + clientIp;
+        String accountKey = "admin:login:fail:" + email;
 
-        String failures = redisTemplate.opsForValue().get(failKey);
-        if (failures != null && Integer.parseInt(failures) >= MAX_FAILED_ATTEMPTS) {
+        if (count(failKey) >= MAX_FAILED_ATTEMPTS || count(accountKey) >= MAX_FAILED_PER_ACCOUNT) {
             throw new ApiException(HttpStatus.TOO_MANY_REQUESTS, "TOO_MANY_ATTEMPTS",
                     "Too many failed attempts. Try again in a few minutes.");
         }
@@ -72,10 +75,10 @@ public class AdminAuthService {
         boolean passwordOk = passwordEncoder.matches(request.password(),
                 found.map(AdminUser::getPasswordHash).orElse(dummyHash));
         if (found.isEmpty() || !passwordOk || !found.get().isActive()) {
-            Long count = redisTemplate.opsForValue().increment(failKey);
-            if (count != null && count == 1) {
-                redisTemplate.expire(failKey, LOCK_DURATION);
-            }
+            registerFailure(failKey);
+            registerFailure(accountKey);
+            log.warn("Failed admin login for {} from {} ({})", email, clientIp,
+                    found.isEmpty() ? "unknown email" : !passwordOk ? "wrong password" : "inactive account");
             throw new ApiException(HttpStatus.UNAUTHORIZED, "INVALID_CREDENTIALS", "Invalid email or password");
         }
         redisTemplate.delete(failKey);
@@ -86,7 +89,9 @@ public class AdminAuthService {
         Instant now = Instant.now();
         Instant expiresAt = now.plus(tokenTtl);
         JwtClaimsSet claims = JwtClaimsSet.builder()
+                .id(UUID.randomUUID().toString())
                 .issuer(SecurityConfig.ISSUER)
+                .audience(List.of(SecurityConfig.AUDIENCE))
                 .subject(admin.getId().toString())
                 .issuedAt(now)
                 .expiresAt(expiresAt)
@@ -97,7 +102,24 @@ public class AdminAuthService {
         String token = jwtEncoder.encode(JwtEncoderParameters.from(
                 JwsHeader.with(MacAlgorithm.HS256).build(), claims)).getTokenValue();
 
+        log.info("Admin {} logged in from {}", admin.getId(), clientIp);
         return new AdminTokenResponse(token, "Bearer", expiresAt, toProfile(admin));
+    }
+
+    public void logout(String jti, Instant expiresAt) {
+        tokenRevocationService.revoke(jti, expiresAt);
+    }
+
+    private int count(String key) {
+        String value = redisTemplate.opsForValue().get(key);
+        return value == null ? 0 : Integer.parseInt(value);
+    }
+
+    private void registerFailure(String key) {
+        Long count = redisTemplate.opsForValue().increment(key);
+        if (count != null && count == 1) {
+            redisTemplate.expire(key, LOCK_DURATION);
+        }
     }
 
     @Transactional(readOnly = true)

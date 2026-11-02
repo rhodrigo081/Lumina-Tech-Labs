@@ -32,16 +32,6 @@ import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
-/**
- * Implements FR02.1-02.3 on top of the availability slots that admins create.
- *
- * Double booking is prevented by {@link AvailabilitySlotRepository#claim}: a
- * single conditional UPDATE (AVAILABLE -> BOOKED) — whoever flips the row
- * first wins, every other concurrent request gets 409 SLOT_UNAVAILABLE.
- * The meeting room is created during booking so the client sees the link right
- * away; if the transaction then rolls back, the external event is removed.
- * Emails only go out after commit.
- */
 @Service
 public class ScheduleService {
 
@@ -75,7 +65,6 @@ public class ScheduleService {
         this.bookingWindow = Duration.ofDays(bookingWindowDays);
     }
 
-    /** FR02.1 — open slots from now + minimum notice up to the booking window. */
     @Transactional(readOnly = true)
     public List<ScheduleSlotResponse> getAvailableSlots(UUID technicianId) {
         Instant now = Instant.now();
@@ -103,7 +92,6 @@ public class ScheduleService {
                             "This lead already has a meeting scheduled");
                 });
 
-        // The lock: only one request can flip this slot to BOOKED.
         int claimed = slotRepository.claim(request.slotId(), SlotStatus.AVAILABLE, SlotStatus.BOOKED,
                 Instant.now().plus(minNotice));
         if (claimed == 0) {
@@ -113,18 +101,15 @@ public class ScheduleService {
             throw ApiException.conflict("SLOT_UNAVAILABLE", "This slot is no longer available");
         }
 
-        // Loaded AFTER claim(): it clears the persistence context.
         AvailabilitySlot slot = slotRepository.findWithTechnicianById(request.slotId()).orElseThrow();
         Technician technician = slot.getTechnician();
         if (!technician.isActive()) {
-            // Rolls back the claim as well.
             throw ApiException.conflict("SLOT_UNAVAILABLE", "This slot is no longer available");
         }
         Lead lead = leadRepository.findById(leadId).orElseThrow(() -> new LeadNotFoundException(leadId));
 
-        // A lead whose previous meeting was cancelled reuses its row (lead_id is UNIQUE).
         Schedule schedule = scheduleRepository.findByLeadId(leadId).orElseGet(() -> Schedule.builder().build());
-        lead.assignSchedule(schedule); // keeps both sides of Lead <-> Schedule in sync
+        lead.assignSchedule(schedule);
         schedule.setTechnician(technician);
         schedule.setSlot(slot);
         schedule.setSdrAssigned(technician.getName());
@@ -139,10 +124,6 @@ public class ScheduleService {
         return toResponse(saved);
     }
 
-    /**
-     * Admin action: CANCELLED frees the slot again (if it is still in the future),
-     * COMPLETED just closes the meeting.
-     */
     @Transactional
     public ScheduleResponse updateStatus(UUID scheduleId, ScheduleStatus newStatus) {
         Schedule schedule = scheduleRepository.findDetailedById(scheduleId)
@@ -168,10 +149,6 @@ public class ScheduleService {
         return toResponse(scheduleRepository.saveAndFlush(schedule));
     }
 
-    /**
-     * Runs after the booking commits (ScheduleBookedEventListener): retries the meeting
-     * room if the provider failed during booking, then sends the confirmations.
-     */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void handleBooked(UUID scheduleId) {
         Schedule schedule = scheduleRepository.findDetailedById(scheduleId).orElse(null);

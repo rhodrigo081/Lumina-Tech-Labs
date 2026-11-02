@@ -19,12 +19,6 @@ import java.util.UUID;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
-/**
- * FR03.4 — resolves the CrmAdapter configured for this deployment
- * (lumina.crm.active-provider) and records every attempt in CrmSyncLog,
- * including failures (so the Outbox worker can find and retry PENDING/
- * FAILURE rows via CrmSyncLogRepository.findBySyncStatus).
- */
 @Service
 public class CrmSyncService {
 
@@ -46,11 +40,6 @@ public class CrmSyncService {
         this.activeProvider = activeProvider;
     }
 
-    /**
-     * REQUIRES_NEW is mandatory here: this runs from an AFTER_COMMIT listener, and
-     * any write that merely "joins" the already-committed transaction is silently
-     * never flushed — which is why crm_sync_log used to stay empty.
-     */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void syncLead(UUID leadId) {
         Lead lead = leadRepository.findById(leadId).orElseThrow(() -> new LeadNotFoundException(leadId));
@@ -77,9 +66,6 @@ public class CrmSyncService {
             crmSyncLogRepository.save(logBuilder
                     .syncStatus(SyncStatus.FAILURE)
                     .build());
-            // Intentionally swallowed here: a CRM outage must never fail the
-            // lead capture request (see design doc, NFR3.2). A scheduled
-            // retry job should poll findBySyncStatus(FAILURE/PENDING).
         }
     }
 }

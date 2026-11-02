@@ -4,6 +4,7 @@ import { Router, RouterLink } from '@angular/router';
 import { AdminAuthService } from '../../core/admin/admin-auth.service';
 import { ApiError } from '../../core/models';
 import { LoadingButtonComponent } from '../../shared/loading-button.component';
+import { MAX } from '../../core/utils';
 
 @Component({
   selector: 'ecm-admin-login',
@@ -34,14 +35,14 @@ import { LoadingButtonComponent } from '../../shared/loading-button.component';
 
           <div class="flex flex-col gap-1">
             <label for="adm-email" class="adm-label">E-mail</label>
-            <input id="adm-email" type="email" formControlName="email" autocomplete="username" class="adm-input"
+            <input id="adm-email" type="email" formControlName="email" [maxlength]="max.email" autocomplete="username" autocapitalize="off" spellcheck="false" class="adm-input"
               [attr.aria-invalid]="form.controls.email.touched && form.controls.email.invalid" />
             @if (form.controls.email.touched && form.controls.email.invalid) { <p class="font-body-sm text-body-sm text-fg-error" role="alert">Informe um e-mail válido.</p> }
           </div>
           <div class="flex flex-col gap-1">
             <label for="adm-password" class="adm-label">Senha</label>
             <div class="relative">
-              <input id="adm-password" [type]="showPassword() ? 'text' : 'password'" formControlName="password" autocomplete="current-password" class="adm-input pr-11"
+              <input id="adm-password" [type]="showPassword() ? 'text' : 'password'" formControlName="password" [maxlength]="max.password" autocomplete="current-password" autocapitalize="off" spellcheck="false" class="adm-input pr-11"
                 [attr.aria-invalid]="form.controls.password.touched && form.controls.password.invalid" />
               <button type="button" (click)="showPassword.set(!showPassword())" [attr.aria-label]="showPassword() ? 'Ocultar senha' : 'Mostrar senha'"
                 class="absolute right-1 top-1 w-9 h-9 rounded-md text-on-surface-variant hover:text-fg-primary flex items-center justify-center">
@@ -62,7 +63,6 @@ import { LoadingButtonComponent } from '../../shared/loading-button.component';
   `,
 })
 export class AdminLoginPage {
-  /** Página que o administrador tentou abrir antes do login (query param ?redirect=). */
   readonly redirect = input<string>('');
 
   private readonly fb = inject(NonNullableFormBuilder);
@@ -70,18 +70,20 @@ export class AdminLoginPage {
   private readonly router = inject(Router);
 
   readonly form = this.fb.group({
-    email: ['', [Validators.required, Validators.email]],
-    password: ['', Validators.required],
+    email: ['', [Validators.required, Validators.email, Validators.maxLength(MAX.email)]],
+    password: ['', [Validators.required, Validators.maxLength(MAX.password)]],
   });
   readonly submitting = signal(false);
   readonly error = signal<string | null>(null);
   readonly showPassword = signal(false);
+  readonly max = MAX;
 
   submit() {
     if (this.submitting()) return;
     if (this.form.invalid) { this.form.markAllAsTouched(); return; }
     const { email, password } = this.form.getRawValue();
     this.submitting.set(true);
+    this.showPassword.set(false);
     this.error.set(null);
     this.auth.login(email.trim(), password).subscribe({
       next: () => {

@@ -11,12 +11,6 @@ import java.time.LocalTime;
 import java.util.List;
 import java.util.UUID;
 
-/**
- * Generates slots for one technician: for each date, from `startTime` to
- * `endTime` (local time in lumina.scheduling.zone — Brasília), one slot of
- * `durationMinutes` followed by `breakMinutes` of pause, repeatedly.
- * Example: 09:00-12:00, 45 min + 15 min pause => 09:00, 10:00, 11:00.
- */
 public record AdminSlotBatchRequest(
         @NotNull(message = "technicianId is required")
         UUID technicianId,

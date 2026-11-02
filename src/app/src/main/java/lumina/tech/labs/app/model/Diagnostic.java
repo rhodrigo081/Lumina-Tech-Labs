@@ -8,13 +8,6 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
 
-/**
- * Relationship: DIAGNOSTIC (1) <-> (1) LEAD — mandatory, OWNING side.
- * @JoinColumn(unique = true) is what actually enforces the 1:1 cardinality
- * at the database level (a plain @OneToOne without `unique = true` on a
- * FK column would only be enforced by application logic, not the schema).
- * optional = false: a Diagnostic cannot exist without a Lead.
- */
 @Entity
 @Table(name = "diagnostic")
 @Getter
@@ -38,7 +31,6 @@ public class Diagnostic {
     @Column(name = "area_m2", precision = 10, scale = 2)
     private BigDecimal areaM2;
 
-    /** Also used as a scoring input (FR03.2) alongside monthlyEnergyBill. */
     @Column(name = "workstations")
     private Integer workstations;
 
@@ -63,6 +55,4 @@ public class Diagnostic {
     @CreationTimestamp
     @Column(name = "calculated_at", updatable = false)
     private Instant calculatedAt;
-
-
 }

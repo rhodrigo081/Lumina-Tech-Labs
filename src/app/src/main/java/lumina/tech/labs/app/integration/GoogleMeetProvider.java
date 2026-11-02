@@ -4,7 +4,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
@@ -23,16 +22,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
-/**
- * Creates a Google Calendar event with a Google Meet conference on the calendar of
- * the account that authorized the app (OAuth refresh token). Google itself emails
- * the invitation to every attendee (lead + technician) and removes it on cancel.
- *
- * Required: lumina.meeting.google.client-id / client-secret / refresh-token
- * (scope https://www.googleapis.com/auth/calendar.events).
- */
 @Component
-@ConditionalOnProperty(name = "lumina.meeting.provider", havingValue = "google")
 public class GoogleMeetProvider implements MeetingProvider {
 
     private static final Logger log = LoggerFactory.getLogger(GoogleMeetProvider.class);
@@ -61,7 +51,7 @@ public class GoogleMeetProvider implements MeetingProvider {
     GoogleMeetProvider(RestClient.Builder http, String clientId, String clientSecret, String refreshToken,
                        String calendarId, String timeZone) {
         if (clientId.isBlank() || clientSecret.isBlank() || refreshToken.isBlank()) {
-            throw new IllegalStateException("lumina.meeting.provider=google requires GOOGLE_CLIENT_ID, "
+            throw new IllegalStateException("Google Meet requires GOOGLE_CLIENT_ID, "
                     + "GOOGLE_CLIENT_SECRET and GOOGLE_REFRESH_TOKEN");
         }
         this.http = http.build();
@@ -105,7 +95,6 @@ public class GoogleMeetProvider implements MeetingProvider {
         String eventId = event.get("id").toString();
         String link = joinUrl(event);
         if (link == null) {
-            // Meet creation is normally synchronous, but the API allows it to be "pending".
             Map<?, ?> again = http.get()
                     .uri(eventsUrl + "/" + eventId)
                     .headers(h -> h.setBearerAuth(token()))
@@ -131,7 +120,6 @@ public class GoogleMeetProvider implements MeetingProvider {
             if (ex.getStatusCode() != HttpStatus.NOT_FOUND && ex.getStatusCode() != HttpStatus.GONE) {
                 throw ex;
             }
-            // Already deleted on the calendar: nothing left to do.
         }
     }
 
@@ -151,7 +139,6 @@ public class GoogleMeetProvider implements MeetingProvider {
         return null;
     }
 
-    /** Access tokens last ~1h; refreshed a minute early. */
     private synchronized String token() {
         if (accessToken != null && Instant.now().isBefore(accessTokenExpiresAt.minusSeconds(60))) {
             return accessToken;

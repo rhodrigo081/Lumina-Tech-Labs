@@ -6,11 +6,8 @@ import { API_BASE } from '../config';
 import { AdminSession } from './admin.models';
 
 const KEY = 'ecm.admin.session';
+export const LOGOUT_URL = `${API_BASE}/admin/auth/logout`;
 
-/**
- * Sessão do administrador. O token fica no sessionStorage (some ao fechar a aba)
- * e a sessão é encerrada automaticamente quando o JWT expira.
- */
 @Injectable({ providedIn: 'root' })
 export class AdminAuthService {
   private readonly http = inject(HttpClient);
@@ -38,25 +35,24 @@ export class AdminAuthService {
     return this.http.post<AdminSession>(`${API_BASE}/admin/auth/login`, { email, password }).pipe(tap((s) => this.start(s)));
   }
 
-  /** Encerra a sessão e volta para o login (guardando a página atual para retornar depois). */
   logout(returnUrl?: string) {
+    if (this.token()) this.http.post(LOGOUT_URL, {}).subscribe({ error: () => { } });
     this.clear();
     this.router.navigate(['/admin/login'], { queryParams: returnUrl && returnUrl !== '/admin/login' ? { redirect: returnUrl } : {} });
   }
 
   private start(s: AdminSession) {
     this.session.set(s);
-    try { sessionStorage.setItem(KEY, JSON.stringify(s)); } catch { /* storage indisponível */ }
+    try { sessionStorage.setItem(KEY, JSON.stringify(s)); } catch { }
     clearTimeout(this.expiryTimer);
     const ms = Date.parse(s.expiresAt) - Date.now();
-    // setTimeout aceita no máximo ~24,8 dias; o token dura horas.
     this.expiryTimer = setTimeout(() => this.logout(this.router.url), Math.min(Math.max(ms, 0), 2_000_000_000));
   }
 
   private clear() {
     clearTimeout(this.expiryTimer);
     this.session.set(null);
-    try { sessionStorage.removeItem(KEY); } catch { /* storage indisponível */ }
+    try { sessionStorage.removeItem(KEY); } catch { }
   }
 
   private restore(): AdminSession | null {

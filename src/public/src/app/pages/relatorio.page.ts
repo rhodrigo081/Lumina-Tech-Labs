@@ -13,13 +13,14 @@ import { ReportSection, parseReportText } from '../core/report-text';
 import { uuid, whatsappUrl } from '../core/utils';
 import { IdentificationFormComponent, buildIdentificationGroup } from '../shared/identification-form.component';
 import { LoadingButtonComponent } from '../shared/loading-button.component';
+import { LegalModalComponent } from '../shared/legal-modal.component';
+import { LegalDocKind } from '../core/legal-texts';
 
 @Component({
   selector: 'ecm-relatorio',
-  imports: [ReactiveFormsModule, RouterLink, CurrencyPipe, DecimalPipe, LoadingButtonComponent, IdentificationFormComponent],
+  imports: [ReactiveFormsModule, RouterLink, CurrencyPipe, DecimalPipe, LoadingButtonComponent, IdentificationFormComponent, LegalModalComponent],
   template: `
     @if (!report()) {
-      <!-- ETAPA 1: formulário de geração do relatório -->
       <div class="max-w-[1280px] w-full mx-auto px-gutter py-space-xl flex flex-col gap-space-lg">
         <header class="max-w-3xl flex flex-col gap-space-xs">
           <span class="font-label-mono text-label-mono text-fg-primary uppercase tracking-wider font-bold">Relatório Executivo</span>
@@ -55,12 +56,13 @@ import { LoadingButtonComponent } from '../shared/loading-button.component';
             <form [formGroup]="form" (ngSubmit)="submit()" class="flex flex-col gap-space-md" novalidate>
               <ecm-identification-form [group]="form.controls.client" prefix="lead" nameLabel="Nome completo" [serverError]="serverError()" />
               <div class="flex flex-col gap-1">
-                <label class="flex items-start gap-3 cursor-pointer">
-                  <input type="checkbox" formControlName="terms" class="mt-1 w-5 h-5 rounded accent-fg-primary shrink-0" />
-                  <span class="font-body-sm text-body-sm text-fg-secondary">Li e concordo com os <strong class="text-fg-primary">Termos de Uso (v1.0)</strong> e a <strong class="text-fg-primary">Política de Privacidade LGPD</strong>. Autorizo o tratamento dos meus dados para fins deste diagnóstico energético.</span>
+                <label class="flex items-center gap-3 cursor-pointer">
+                  <input type="checkbox" formControlName="terms" class="w-5 h-5 rounded accent-fg-primary shrink-0" />
+                  <span class="font-body-sm text-body-sm text-fg-secondary">Li e concordo com os <button type="button" (click)="openLegal($event, 'terms')" class="font-bold text-fg-primary underline underline-offset-2 hover:opacity-80">Termos de Uso</button> e <button type="button" (click)="openLegal($event, 'privacy')" class="font-bold text-fg-primary underline underline-offset-2 hover:opacity-80">Política de Privacidade</button>.</span>
                 </label>
                 @if (form.controls.terms.touched && form.controls.terms.invalid) { <p class="font-body-sm text-body-sm text-fg-error" role="alert">Aceite os termos para continuar.</p> }
               </div>
+              <ecm-legal-modal [kind]="legalDoc()" (closed)="legalDoc.set(null)" />
               @if (submitError(); as se) {
                 <div class="p-space-sm rounded-lg bg-error-container text-on-error-container flex items-start gap-space-sm" role="alert">
                   <span class="material-symbols-outlined text-[20px] shrink-0" aria-hidden="true">error</span>
@@ -184,7 +186,6 @@ import { LoadingButtonComponent } from '../shared/loading-button.component';
           }
         </section>
 
-        <!-- Relatório completo (texto devolvido pelo backend em GET /leads/{id}/report) -->
         <section class="bg-surface-container-lowest rounded-3xl p-space-lg xl:p-space-xl shadow-sm flex flex-col gap-space-lg no-print" aria-labelledby="full-h" [attr.aria-busy]="full().status === 'loading'">
           <div class="flex flex-col xl:flex-row xl:items-center justify-between gap-space-md">
             <div><span class="font-label-mono text-label-mono text-fg-secondary uppercase tracking-widest">Dossiê técnico</span>
@@ -325,7 +326,6 @@ export class RelatorioPage {
     'Relatório completo gerado pela plataforma.',
   ];
 
-  /* ----- formulário de identificação ----- */
   private readonly fb = inject(FormBuilder).nonNullable;
   readonly form = this.fb.group({
     client: buildIdentificationGroup(this.fb, { initial: this.store.client() ?? {} }),
@@ -336,7 +336,13 @@ export class RelatorioPage {
   readonly submitError = signal<FriendlyError | null>(null);
   readonly serverError = signal<string | null>(null);
   readonly duplicate = signal(false);
-  /** A mesma chave é reaproveitada em reenvios idênticos (falha de rede); muda quando os dados mudam. */
+  readonly legalDoc = signal<LegalDocKind | null>(null);
+
+  openLegal(ev: Event, kind: LegalDocKind): void {
+    ev.preventDefault();
+    ev.stopPropagation();
+    this.legalDoc.set(kind);
+  }
   private leadKey = uuid();
 
   constructor() {
@@ -376,12 +382,11 @@ export class RelatorioPage {
         const f = friendly(e, 'lead');
         this.submitError.set(f);
         if (e.status === 409 && e.code !== 'REQUEST_IN_PROGRESS') { this.duplicate.set(true); this.serverError.set('Este e-mail já possui um diagnóstico.'); this.identification()?.focusField('email'); }
-        if (e.status >= 400 && e.status < 500 && e.code !== 'REQUEST_IN_PROGRESS') this.leadKey = uuid(); // erro de validação: próxima tentativa é uma nova requisição
+        if (e.status >= 400 && e.status < 500 && e.code !== 'REQUEST_IN_PROGRESS') this.leadKey = uuid();
       },
     });
   }
 
-  /* ----- relatório ----- */
   readonly shortId = computed(() => (this.report()?.id ?? '').slice(0, 8).toUpperCase());
   readonly monthly = computed(() => (this.report()?.diagnostic.annualSavings ?? 0) / 12);
   readonly annualCost = computed(() => (this.report()?.diagnostic.monthlyEnergyBill ?? 0) * 12);
@@ -389,7 +394,6 @@ export class RelatorioPage {
   readonly whatsapp = computed(() => whatsappUrl(`Olá, gostaria de tirar dúvidas sobre o meu relatório #${this.shortId()}.`));
   dateTime = dateTimeOf;
 
-  /** Curva linear: investimento implícito = payback × economia mensal; fluxo acumulado = economia × mês − investimento. */
   readonly chart = computed(() => {
     const d = this.report()?.diagnostic;
     if (!d) return null;

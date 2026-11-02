@@ -60,7 +60,6 @@ class AdminSlotServiceTest {
             assertThat(s.status()).isEqualTo(SlotStatus.AVAILABLE);
             assertThat(s.endTime()).isEqualTo(s.startTime().plusSeconds(45 * 60));
         });
-        // 09:00 in Brasília (UTC-3) is 12:00 UTC.
         assertThat(response.created().get(0).startTime().toString()).endsWith("T12:00:00Z");
     }
 

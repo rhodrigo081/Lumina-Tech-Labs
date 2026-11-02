@@ -7,7 +7,6 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
 
-/** Same AFTER_COMMIT + @Async guarantees as NotificationEventListener — see its Javadoc for the outbox caveat. */
 @Component
 public class CrmSyncEventListener {
 

@@ -1,11 +1,20 @@
 package lumina.tech.labs.app.config;
 
 import com.nimbusds.jose.jwk.source.ImmutableSecret;
-import jakarta.servlet.http.HttpServletResponse;
+import lumina.tech.labs.app.exception.ErrorResponses;
+import lumina.tech.labs.app.security.TokenRevocationService;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
+import org.springframework.http.HttpStatus;
+import org.springframework.security.oauth2.core.DelegatingOAuth2TokenValidator;
+import org.springframework.security.oauth2.core.OAuth2Error;
+import org.springframework.security.oauth2.core.OAuth2TokenValidator;
+import org.springframework.security.oauth2.core.OAuth2TokenValidatorResult;
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.oauth2.jwt.JwtClaimNames;
+import org.springframework.security.oauth2.jwt.JwtClaimValidator;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
@@ -23,46 +32,39 @@ import org.springframework.security.web.SecurityFilterChain;
 
 import javax.crypto.SecretKey;
 import javax.crypto.spec.SecretKeySpec;
-import java.io.IOException;
 import java.nio.charset.StandardCharsets;
-import java.time.Instant;
+import java.util.List;
 
-/**
- * Two kinds of endpoints:
- *  - the public B2B capture funnel (RF01-RF03): anonymous, no account;
- *  - the admin area (/api/v1/admin/**): requires a JWT issued by
- *    POST /api/v1/admin/auth/login with the ADMIN role.
- *
- * Tokens are HS256-signed with lumina.security.jwt.secret (JWT_SECRET) and
- * validated by Spring Security's OAuth2 resource server support.
- */
 @Configuration
 @EnableWebSecurity
 public class SecurityConfig {
 
     public static final String ISSUER = "lumina-tech-labs";
+    public static final String AUDIENCE = "lumina-admin-api";
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http,
                                                    JwtAuthenticationConverter jwtAuthenticationConverter) throws Exception {
         http
-                .cors(cors -> {}) // delegates to the CorsConfigurationSource bean in CorsConfig
-                .csrf(csrf -> csrf.disable()) // stateless JSON API, bearer tokens (no cookies)
+                .cors(cors -> {})
+                .csrf(csrf -> csrf.disable())
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/v1/admin/auth/login").permitAll()
                         .requestMatchers("/api/v1/admin/**").hasRole("ADMIN")
-                        .anyRequest().permitAll())
+                        .requestMatchers("/api/**", "/actuator/health/**", "/actuator/info", "/error").permitAll()
+                        .requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
+                        .anyRequest().denyAll())
                 .oauth2ResourceServer(oauth -> oauth
                         .jwt(jwt -> jwt.jwtAuthenticationConverter(jwtAuthenticationConverter))
                         .authenticationEntryPoint((req, res, ex) ->
-                                writeError(res, req.getRequestURI(), 401, "Unauthorized", "UNAUTHORIZED", "Authentication required")))
+                                ErrorResponses.write(req, res, HttpStatus.UNAUTHORIZED, "UNAUTHORIZED", "Authentication required")))
                 .exceptionHandling(ex -> ex
                         .authenticationEntryPoint((req, res, e) ->
-                                writeError(res, req.getRequestURI(), 401, "Unauthorized", "UNAUTHORIZED", "Authentication required"))
+                                ErrorResponses.write(req, res, HttpStatus.UNAUTHORIZED, "UNAUTHORIZED", "Authentication required"))
                         .accessDeniedHandler((req, res, e) ->
-                                writeError(res, req.getRequestURI(), 403, "Forbidden", "FORBIDDEN", "Access denied")));
+                                ErrorResponses.write(req, res, HttpStatus.FORBIDDEN, "FORBIDDEN", "Access denied")));
 
         return http.build();
     }
@@ -82,13 +84,24 @@ public class SecurityConfig {
     }
 
     @Bean
-    public JwtDecoder jwtDecoder(SecretKey jwtSecretKey) {
+    public JwtDecoder jwtDecoder(SecretKey jwtSecretKey, TokenRevocationService revocations) {
         NimbusJwtDecoder decoder = NimbusJwtDecoder.withSecretKey(jwtSecretKey).macAlgorithm(MacAlgorithm.HS256).build();
-        decoder.setJwtValidator(JwtValidators.createDefaultWithIssuer(ISSUER));
+        OAuth2TokenValidator<Jwt> notRevoked = jwt -> {
+            try {
+                return jwt.getId() != null && !revocations.isRevoked(jwt.getId())
+                        ? OAuth2TokenValidatorResult.success()
+                        : OAuth2TokenValidatorResult.failure(new OAuth2Error("invalid_token", "Token revoked", null));
+            } catch (RuntimeException ex) {
+                return OAuth2TokenValidatorResult.failure(new OAuth2Error("invalid_token", "Token state unavailable", null));
+            }
+        };
+        decoder.setJwtValidator(new DelegatingOAuth2TokenValidator<>(
+                JwtValidators.createDefaultWithIssuer(ISSUER),
+                new JwtClaimValidator<List<String>>(JwtClaimNames.AUD, aud -> aud != null && aud.contains(AUDIENCE)),
+                notRevoked));
         return decoder;
     }
 
-    /** Maps the `roles` claim (["ADMIN"]) to ROLE_ADMIN authorities. */
     @Bean
     public JwtAuthenticationConverter jwtAuthenticationConverter() {
         JwtGrantedAuthoritiesConverter authorities = new JwtGrantedAuthoritiesConverter();
@@ -102,20 +115,5 @@ public class SecurityConfig {
     @Bean
     public PasswordEncoder passwordEncoder() {
         return new BCryptPasswordEncoder();
-    }
-
-    /** Same JSON shape as GlobalExceptionHandler (ApiErrorResponse), for errors raised inside the filter chain. */
-    private static void writeError(HttpServletResponse res, String path, int status, String error, String code,
-                                   String message) throws IOException {
-        res.setStatus(status);
-        res.setContentType("application/json");
-        res.setCharacterEncoding("UTF-8");
-        res.getWriter().write("{\"timestamp\":\"" + Instant.now() + "\",\"status\":" + status + ",\"error\":\"" + error
-                + "\",\"code\":\"" + code + "\",\"message\":\"" + message + "\",\"path\":\"" + jsonEscape(path)
-                + "\",\"fieldErrors\":null}");
-    }
-
-    private static String jsonEscape(String value) {
-        return value.replace("\\", "\\\\").replace("\"", "\\\"");
     }
 }

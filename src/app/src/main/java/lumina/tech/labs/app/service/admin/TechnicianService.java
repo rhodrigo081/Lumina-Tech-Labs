@@ -51,7 +51,6 @@ public class TechnicianService {
         technician.setEmail(email);
         technician.setSpecialty(blankToNull(request.specialty()));
         if (request.active() != null) {
-            // Deactivating hides the technician's open slots from the public grid; existing meetings are kept.
             technician.setActive(request.active());
         }
         return toResponse(technicianRepository.saveAndFlush(technician));

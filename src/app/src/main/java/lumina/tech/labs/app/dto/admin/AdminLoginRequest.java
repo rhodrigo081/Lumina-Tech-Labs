@@ -11,7 +11,7 @@ public record AdminLoginRequest(
         String email,
 
         @NotBlank(message = "password is required")
-        @Size(max = 200)
+        @Size(max = 72)
         String password
 ) {
 }

@@ -1,10 +1,8 @@
-/** Tokens do design system EcoMetric (copiados dos protótipos HTML) */
 module.exports = {
   content: ['./src/**/*.{html,ts}'],
   darkMode: 'class',
   theme: {
     extend: {
-      // Cores vêm de variáveis CSS (src/styles.css): troque o tema alterando só as variáveis.
       colors: Object.fromEntries(
         ["on-background", "on-secondary-container", "error-container", "background", "on-surface", "primary-container", "on-tertiary-fixed-variant", "inverse-on-surface", "secondary-fixed-dim", "on-primary", "surface-tint", "surface-container-highest", "on-surface-variant", "tertiary-fixed", "secondary-fixed", "primary-fixed", "primary-fixed-dim", "on-primary-fixed", "primary", "on-primary-fixed-variant", "inverse-surface", "on-secondary-fixed-variant", "on-secondary", "surface-dim", "on-tertiary-container", "outline", "on-tertiary-fixed", "on-primary-container", "secondary", "surface-container", "on-tertiary", "tertiary-fixed-dim", "surface-container-low", "surface-container-lowest", "surface", "inverse-primary", "outline-variant", "error", "on-error-container", "surface-bright", "on-error", "on-secondary-fixed", "secondary-container", "tertiary-container", "tertiary", "surface-container-high", "surface-variant", "fg-primary", "fg-secondary", "fg-tertiary", "fg-error", "lit-tertiary", "lit-tertiary-dim", "lit-on-tertiary", "lit-secondary"].map((n) => [n, `rgb(var(--c-${n}) / <alpha-value>)`]),
       ),

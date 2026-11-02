@@ -9,6 +9,7 @@ import { friendly } from '../../core/errors';
 import { ApiError } from '../../core/models';
 import { ToastService } from '../../core/state.services';
 import { LoadingButtonComponent } from '../../shared/loading-button.component';
+import { ConfirmService } from '../../shared/confirm-dialog.component';
 
 interface DayGroup { key: string; label: string; weekday: string; slots: AdminSlot[]; }
 
@@ -33,7 +34,6 @@ const toMinutes = (t: string) => { const [h, m] = t.split(':').map(Number); retu
       </header>
 
       <div class="grid grid-cols-1 xl:grid-cols-12 gap-space-lg items-start">
-        <!-- Semana -->
         <section class="xl:col-span-8 adm-card flex flex-col gap-space-md" aria-labelledby="week-h" [attr.aria-busy]="loading()">
           <div class="flex flex-col md:flex-row md:items-center justify-between gap-space-sm">
             <div class="flex items-center gap-space-xs">
@@ -88,18 +88,14 @@ const toMinutes = (t: string) => { const [h, m] = t.split(':').map(Number); retu
                           @if (s.status === 'BOOKED') {
                             <span class="adm-chip bg-primary text-on-primary">Reservado</span>
                             @if (s.booking && s.startTime > nowIso()) {
-                              <button type="button" class="adm-btn-danger !h-8 !px-2" [disabled]="busyId() === s.id" (click)="cancelMeeting(s)"
-                                [attr.aria-label]="confirming() === s.id ? 'Confirmar cancelamento da reunião' : 'Cancelar reunião'">
+                              <button type="button" class="adm-btn-danger !h-8 !px-2" [disabled]="busyId() === s.id" (click)="cancelMeeting(s)" aria-label="Cancelar reunião">
                                 <span class="material-symbols-outlined text-[18px]" aria-hidden="true">event_busy</span>
-                                @if (confirming() === s.id) { <span>Confirmar</span> }
                               </button>
                             }
                           } @else {
                             <span class="adm-chip bg-tertiary-fixed text-on-tertiary-fixed">Livre</span>
-                            <button type="button" class="!h-8 !px-2" [class]="confirming() === s.id ? 'adm-btn-danger' : 'adm-btn-ghost'" [disabled]="busyId() === s.id" (click)="remove(s)"
-                              [attr.aria-label]="confirming() === s.id ? 'Confirmar remoção do horário' : 'Remover horário'">
+                            <button type="button" class="adm-btn-ghost !h-8 !px-2" [disabled]="busyId() === s.id" (click)="remove(s)" aria-label="Remover horário">
                               <span class="material-symbols-outlined text-[18px]" aria-hidden="true">delete</span>
-                              @if (confirming() === s.id) { <span>Remover</span> }
                             </button>
                           }
                         </li>
@@ -114,7 +110,6 @@ const toMinutes = (t: string) => { const [h, m] = t.split(':').map(Number); retu
           }
         </section>
 
-        <!-- Criar horários -->
         <section class="xl:col-span-4 adm-card flex flex-col gap-space-md xl:sticky xl:top-6" aria-labelledby="new-h">
           <div class="flex items-start gap-space-sm">
             <div class="w-10 h-10 rounded-lg bg-secondary-container text-on-secondary-container flex items-center justify-center shrink-0"><span class="material-symbols-outlined text-[22px]" aria-hidden="true">add_task</span></div>
@@ -192,6 +187,7 @@ const toMinutes = (t: string) => { const [h, m] = t.split(':').map(Number); retu
 export class AdminAgendaPage implements OnInit {
   private readonly api = inject(AdminApiService);
   private readonly toast = inject(ToastService);
+  private readonly confirm = inject(ConfirmService);
   private readonly fb = inject(NonNullableFormBuilder);
 
   readonly weekdays = WEEKDAYS;
@@ -208,11 +204,9 @@ export class AdminAgendaPage implements OnInit {
   readonly slots = signal<AdminSlot[]>([]);
   readonly loading = signal(false);
   readonly error = signal<{ title: string; message: string } | null>(null);
-  readonly confirming = signal<string | null>(null);
   readonly busyId = signal<string | null>(null);
   readonly creating = signal(false);
   readonly selectedWeekdays = signal(new Set([1, 2, 3, 4, 5]));
-  private confirmTimer?: ReturnType<typeof setTimeout>;
 
   readonly form = this.fb.group({
     technicianId: ['', Validators.required],
@@ -244,7 +238,6 @@ export class AdminAgendaPage implements OnInit {
     booked: this.slots().filter((s) => s.status === 'BOOKED').length,
   }));
 
-  /** Prévia do que será gerado (o backend é quem valida de fato). */
   readonly plan = computed(() => {
     const v = { ...this.form.getRawValue(), ...this.v() };
     const dates: string[] = [];
@@ -327,7 +320,6 @@ export class AdminAgendaPage implements OnInit {
         this.toast.show(created ? `${created} ${created === 1 ? 'horário criado' : 'horários criados'}` : 'Nenhum horário criado',
           r.skipped ? `${r.skipped} ignorado(s) por já terem passado ou se sobreporem a horários existentes.` : 'Os clientes já podem reservar.',
           created ? 'success' : 'error');
-        // Mostra a semana do primeiro horário criado.
         if (created) this.monday.set(mondayOf(dayKey(r.created[0].startTime)));
         this.loadWeek();
       },
@@ -335,30 +327,32 @@ export class AdminAgendaPage implements OnInit {
     });
   }
 
-  remove(s: AdminSlot) {
-    if (!this.askConfirm(s.id)) return;
+  async remove(s: AdminSlot) {
+    const when = `${shortDayLabel(dayKey(s.startTime))} às ${timeOf(s.startTime)}`;
+    const ok = await this.confirm.ask({
+      title: 'Remover este horário?', danger: true, confirmLabel: 'Remover horário',
+      message: `O horário livre de ${when} (${s.technicianName}) deixará de aparecer para os clientes.`,
+    });
+    if (!ok || this.busyId()) return;
     this.busyId.set(s.id);
     this.api.deleteSlot(s.id).subscribe({
-      next: () => { this.busyId.set(null); this.slots.update((all) => all.filter((x) => x.id !== s.id)); this.toast.show('Horário removido', `${shortDayLabel(dayKey(s.startTime))} às ${timeOf(s.startTime)}`); },
+      next: () => { this.busyId.set(null); this.slots.update((all) => all.filter((x) => x.id !== s.id)); this.toast.show('Horário removido', when); },
       error: (e: ApiError) => { this.busyId.set(null); const f = friendly(e, 'admin'); this.toast.show(f.title, f.message, 'error'); this.loadWeek(); },
     });
   }
 
-  cancelMeeting(s: AdminSlot) {
-    if (!s.booking || !this.askConfirm(s.id)) return;
+  async cancelMeeting(s: AdminSlot) {
+    const booking = s.booking;
+    if (!booking) return;
+    const ok = await this.confirm.ask({
+      title: 'Cancelar esta reunião?', danger: true, confirmLabel: 'Cancelar reunião', cancelLabel: 'Manter reunião',
+      message: `A reunião com ${booking.leadName} (${booking.companyName}) em ${shortDayLabel(dayKey(s.startTime))} às ${timeOf(s.startTime)} será cancelada. O horário volta a ficar livre e o cliente é avisado por e-mail.`,
+    });
+    if (!ok || this.busyId()) return;
     this.busyId.set(s.id);
-    this.api.setMeetingStatus(s.booking.scheduleId, 'CANCELLED').subscribe({
+    this.api.setMeetingStatus(booking.scheduleId, 'CANCELLED').subscribe({
       next: () => { this.busyId.set(null); this.toast.show('Reunião cancelada', 'O horário voltou a ficar livre e o cliente foi avisado por e-mail.'); this.loadWeek(); },
       error: (e: ApiError) => { this.busyId.set(null); const f = friendly(e, 'admin'); this.toast.show(f.title, f.message, 'error'); },
     });
-  }
-
-  /** Ações destrutivas em dois cliques: o primeiro arma a confirmação (por 5 s), o segundo executa. */
-  private askConfirm(id: string): boolean {
-    if (this.confirming() === id) { this.confirming.set(null); return true; }
-    this.confirming.set(id);
-    clearTimeout(this.confirmTimer);
-    this.confirmTimer = setTimeout(() => this.confirming.set(null), 5000);
-    return false;
   }
 }

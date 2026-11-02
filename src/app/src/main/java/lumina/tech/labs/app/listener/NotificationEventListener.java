@@ -10,17 +10,6 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
 
-/**
- * phase = AFTER_COMMIT: this only runs if LeadService.captureLead's
- * transaction actually committed — a rollback (e.g. a constraint violation)
- * never triggers an email to a lead that was not actually saved.
- *
- * @Async: runs off the request thread (see AsyncConfig).
- *
- * NOTE: still an in-process approximation of the Outbox pattern from the
- * design doc — a crash between commit and this listener loses the
- * notification. Promote to a persisted outbox table if that matters.
- */
 @Component
 public class NotificationEventListener {
 

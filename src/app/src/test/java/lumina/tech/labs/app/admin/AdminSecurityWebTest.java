@@ -10,6 +10,7 @@ import lumina.tech.labs.app.dto.admin.AdminDashboardResponse;
 import lumina.tech.labs.app.dto.admin.AdminProfileResponse;
 import lumina.tech.labs.app.dto.admin.AdminTokenResponse;
 import lumina.tech.labs.app.exception.ApiException;
+import lumina.tech.labs.app.security.TokenRevocationService;
 import lumina.tech.labs.app.service.ScheduleService;
 import lumina.tech.labs.app.service.admin.AdminAuthService;
 import lumina.tech.labs.app.service.admin.AdminLeadService;
@@ -46,7 +47,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @Import({SecurityConfig.class, CorsConfig.class})
 @TestPropertySource(properties = {
         "lumina.security.jwt.secret=test-secret-with-at-least-32-bytes-for-hs256!",
-        "lumina.cors.allowed-origins=http://localhost:4200"
+        "lumina.cors.allowed-origins=http://localhost:4200",
+        "lumina.rate-limit.enabled=false"
 })
 class AdminSecurityWebTest {
 
@@ -57,6 +59,7 @@ class AdminSecurityWebTest {
     @MockitoBean AdminLeadService adminLeadService;
     @MockitoBean AdminSlotService adminSlotService;
     @MockitoBean ScheduleService scheduleService;
+    @MockitoBean TokenRevocationService tokenRevocationService;
 
     @Test
     void adminEndpointsRequireAToken() throws Exception {
@@ -94,7 +97,7 @@ class AdminSecurityWebTest {
 
     @Test
     void loginIsPublicAndReturnsTheToken() throws Exception {
-        given(adminAuthService.login(any())).willReturn(new AdminTokenResponse("abc.def.ghi", "Bearer",
+        given(adminAuthService.login(any(), any())).willReturn(new AdminTokenResponse("abc.def.ghi", "Bearer",
                 Instant.parse("2030-01-01T00:00:00Z"), new AdminProfileResponse(UUID.randomUUID(), "Admin", "admin@lumina.tech")));
 
         mvc.perform(post("/api/v1/admin/auth/login").contentType(MediaType.APPLICATION_JSON)
@@ -106,7 +109,7 @@ class AdminSecurityWebTest {
 
     @Test
     void wrongCredentialsAreA401WithACode() throws Exception {
-        given(adminAuthService.login(any())).willThrow(
+        given(adminAuthService.login(any(), any())).willThrow(
                 new ApiException(HttpStatus.UNAUTHORIZED, "INVALID_CREDENTIALS", "Invalid email or password"));
 
         mvc.perform(post("/api/v1/admin/auth/login").contentType(MediaType.APPLICATION_JSON)
@@ -140,7 +143,51 @@ class AdminSecurityWebTest {
                 .andExpect(jsonPath("$.fieldErrors.length()").value(2));
     }
 
+    @Test
+    void tokenForAnotherAudienceOrWithoutIdIsRejected() throws Exception {
+        mvc.perform(get("/api/v1/admin/dashboard").header("Authorization", "Bearer " + token(List.of("ADMIN"), SecurityConfig.ISSUER, Duration.ofHours(1), "other-api", "id-1")))
+                .andExpect(status().isUnauthorized());
+        mvc.perform(get("/api/v1/admin/dashboard").header("Authorization", "Bearer " + token(List.of("ADMIN"), SecurityConfig.ISSUER, Duration.ofHours(1), SecurityConfig.AUDIENCE, null)))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void revokedTokenIsRejected() throws Exception {
+        given(tokenRevocationService.isRevoked("revoked-id")).willReturn(true);
+        mvc.perform(get("/api/v1/admin/dashboard").header("Authorization", "Bearer " + token(List.of("ADMIN"), SecurityConfig.ISSUER, Duration.ofHours(1), SecurityConfig.AUDIENCE, "revoked-id")))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("UNAUTHORIZED"));
+    }
+
+    @Test
+    void logoutRevokesTheCurrentToken() throws Exception {
+        mvc.perform(post("/api/v1/admin/auth/logout").header("Authorization", "Bearer " + token(List.of("ADMIN"), SecurityConfig.ISSUER, Duration.ofHours(1), SecurityConfig.AUDIENCE, "my-token-id")))
+                .andExpect(status().isNoContent());
+        org.mockito.BDDMockito.then(adminAuthService).should().logout(org.mockito.ArgumentMatchers.eq("my-token-id"), any());
+    }
+
+    @Test
+    void errorsNeverLeakTechnicalDetailsAndCarryATraceId() throws Exception {
+        mvc.perform(get("/api/v1/schedule/slots").param("technicianId", "not-a-uuid"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("Invalid or missing request parameter"))
+                .andExpect(jsonPath("$.traceId").isNotEmpty())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.header().exists("X-Request-Id"));
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete("/api/v1/schedule/slots"))
+                .andExpect(status().isMethodNotAllowed())
+                .andExpect(jsonPath("$.message").value("Method not allowed"));
+    }
+
+    @Test
+    void unknownNonApiPathsAreDeniedByDefault() throws Exception {
+        mvc.perform(get("/actuator/env")).andExpect(status().isUnauthorized());
+    }
+
     private String token(List<String> roles, String issuer, Duration validFor) {
+        return token(roles, issuer, validFor, SecurityConfig.AUDIENCE, UUID.randomUUID().toString());
+    }
+
+    private String token(List<String> roles, String issuer, Duration validFor, String audience, String id) {
         Instant now = Instant.now();
         Instant issuedAt = validFor.isNegative() ? now.plus(validFor).minus(Duration.ofHours(1)) : now;
         JwtClaimsSet claims = JwtClaimsSet.builder()
@@ -149,7 +196,11 @@ class AdminSecurityWebTest {
                 .issuedAt(issuedAt)
                 .expiresAt(now.plus(validFor))
                 .claim("roles", roles)
+                .audience(List.of(audience))
                 .build();
+        if (id != null) {
+            claims = JwtClaimsSet.from(claims).id(id).build();
+        }
         return jwtEncoder.encode(JwtEncoderParameters.from(JwsHeader.with(MacAlgorithm.HS256).build(), claims)).getTokenValue();
     }
 }

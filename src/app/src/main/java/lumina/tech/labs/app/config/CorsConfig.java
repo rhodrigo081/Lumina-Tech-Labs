@@ -9,11 +9,6 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
 import java.util.List;
 
-/**
- * Origins are externalized (application.yml -> lumina.cors.allowed-origins,
- * comma-separated) so the same JAR/image can be deployed to
- * dev/staging/prod pointing at different Angular hosts without a rebuild.
- */
 @Configuration
 public class CorsConfig {
 
@@ -25,8 +20,8 @@ public class CorsConfig {
         configuration.setAllowedOrigins(allowedOrigins);
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         configuration.setAllowedHeaders(List.of("Authorization", "Content-Type", "Idempotency-Key"));
-        configuration.setExposedHeaders(List.of("Location"));
-        configuration.setAllowCredentials(true);
+        configuration.setExposedHeaders(List.of("Location", "Retry-After", "X-Request-Id"));
+        configuration.setAllowCredentials(false);
         configuration.setMaxAge(3600L);
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
