@@ -5,7 +5,7 @@ import { ApiService } from '../core/api.service';
 import { FriendlyError, friendly } from '../core/errors';
 import { ApiError } from '../core/models';
 import { JourneyStore, ToastService } from '../core/state.services';
-import { EMAIL_PATTERN, MAX, maskPhone, notBlank, uuid, whatsappUrl } from '../core/utils';
+import { EMAIL_PATTERN, MAX, fieldError, notBlank, onPhoneInput, uuid, whatsappUrl } from '../core/utils';
 import { LoadingButtonComponent } from '../shared/loading-button.component';
 
 type Field = 'name' | 'email' | 'phone' | 'company' | 'subject' | 'message';
@@ -127,16 +127,10 @@ export class ContatoPage {
   }
 
   err(name: Field): string | null {
-    const c = this.form.controls[name];
-    if (!c.invalid || !c.touched) return null;
-    if (c.hasError('required')) return 'Campo obrigatório.';
-    if (c.hasError('email') || c.hasError('pattern')) return 'Informe um e-mail válido.';
-    if (c.hasError('maxlength')) return `Máximo de ${c.getError('maxlength').requiredLength} caracteres.`;
-    if (c.hasError('minlength')) return name === 'phone' ? 'Informe o telefone com DDD.' : 'Texto muito curto.';
-    return 'Valor inválido.';
+    return fieldError(this.form.controls[name], name === 'phone' ? 'Informe o telefone com DDD.' : undefined);
   }
 
-  onPhone(e: Event) { const el = e.target as HTMLInputElement; el.value = maskPhone(el.value); this.form.controls.phone.setValue(el.value, { emitEvent: false }); }
+  onPhone(e: Event) { onPhoneInput(e, this.form.controls.phone); }
 
   submit() {
     if (this.form.invalid) {

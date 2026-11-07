@@ -1,5 +1,6 @@
 package lumina.tech.labs.app.dto.admin;
 
+import lumina.tech.labs.app.dto.response.ScheduleResponse;
 import lumina.tech.labs.app.enums.Priority;
 
 import java.math.BigDecimal;
@@ -18,6 +19,6 @@ public record AdminLeadSummaryResponse(
         Integer workstations,
         BigDecimal monthlyEnergyBill,
         BigDecimal annualSavings,
-        AdminMeetingInfo meeting
+        ScheduleResponse meeting
 ) {
 }

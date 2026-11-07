@@ -21,7 +21,7 @@ export const LEGAL_DOCS: Record<LegalDocKind, LegalDoc> = {
   terms: {
     title: 'Termos de Uso',
     version: TERMS_VERSION,
-    updatedAt: '02/11/2026',
+    updatedAt: '07/11/2026',
     intro:
       'Estes Termos de Uso regulam o acesso e a utilização da plataforma de diagnóstico de eficiência energética da Lumina Tech Labs. Ao marcar a caixa de aceite, você declara ter lido, compreendido e concordado com as condições abaixo.',
     clauses: [
@@ -34,8 +34,8 @@ export const LEGAL_DOCS: Record<LegalDocKind, LegalDoc> = {
       {
         title: '2. Cadastro e veracidade das informações',
         paragraphs: [
-          'Para gerar o relatório, o usuário deve informar nome, cargo, empresa, telefone e e-mail corporativo. O usuário é responsável pela veracidade, exatidão e atualização dos dados fornecidos.',
-          'Não são aceitos e-mails de provedores genéricos (ex.: Gmail, Hotmail), pois o serviço destina-se exclusivamente a pessoas jurídicas e seus representantes.',
+          'Para gerar o relatório, o usuário deve informar nome, cargo, empresa, telefone e e-mail. O usuário é responsável pela veracidade, exatidão e atualização dos dados fornecidos.',
+          'São aceitos tanto e-mails corporativos quanto de provedores pessoais (ex.: Gmail, Hotmail, Outlook). O serviço é voltado a empresas e seus representantes, e o usuário declara agir em nome da empresa informada.',
         ],
       },
       {
@@ -86,7 +86,7 @@ export const LEGAL_DOCS: Record<LegalDocKind, LegalDoc> = {
   privacy: {
     title: 'Política de Privacidade',
     version: TERMS_VERSION,
-    updatedAt: '02/11/2026',
+    updatedAt: '07/11/2026',
     intro:
       'Esta Política de Privacidade descreve como a Lumina Tech Labs coleta, utiliza, armazena e protege os dados pessoais tratados na plataforma, em conformidade com a Lei Geral de Proteção de Dados Pessoais (Lei nº 13.709/2018 — LGPD).',
     clauses: [
@@ -99,7 +99,7 @@ export const LEGAL_DOCS: Record<LegalDocKind, LegalDoc> = {
       {
         title: '2. Dados coletados',
         paragraphs: [
-          'Dados de identificação e contato: nome completo, cargo, empresa, telefone e e-mail corporativo.',
+          'Dados de identificação e contato: nome completo, cargo, empresa, telefone e e-mail (corporativo ou pessoal).',
           'Dados do diagnóstico: área do ambiente, número de estações de trabalho, valor da fatura de energia e demais parâmetros informados na simulação.',
           'Dados de consentimento: data e hora do aceite, endereço IP e versão dos termos aceitos.',
           'Dados de agendamento: data, horário e modalidade da visita ou reunião escolhida.',

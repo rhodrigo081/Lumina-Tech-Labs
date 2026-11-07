@@ -1,7 +1,7 @@
 import { Component, input } from '@angular/core';
 import { NonNullableFormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { Identification } from '../core/models';
-import { EMAIL_PATTERN, MAX, maskPhone, notBlank } from '../core/utils';
+import { EMAIL_PATTERN, MAX, fieldError, notBlank, onPhoneInput } from '../core/utils';
 
 type Field = 'name' | 'role' | 'company' | 'phone' | 'email';
 
@@ -70,23 +70,11 @@ export class IdentificationFormComponent {
   readonly max = MAX;
 
   err(f: Field): string | null {
-    const c = this.group().controls[f];
-    if (f === 'email') {
-      if (this.serverError()) return this.serverError();
-    }
-    if (!c.invalid || !c.touched) return null;
-    if (c.hasError('required')) return 'Campo obrigatório.';
-    if (c.hasError('email') || c.hasError('pattern')) return 'Informe um e-mail válido.';
-    if (c.hasError('maxlength')) return `Máximo de ${c.getError('maxlength').requiredLength} caracteres.`;
-    if (c.hasError('minlength')) return 'Informe o telefone com DDD.';
-    return 'Valor inválido.';
+    if (f === 'email' && this.serverError()) return this.serverError();
+    return fieldError(this.group().controls[f], 'Informe o telefone com DDD.');
   }
 
-  onPhone(e: Event) {
-    const el = e.target as HTMLInputElement;
-    el.value = maskPhone(el.value);
-    this.group().controls.phone.setValue(el.value, { emitEvent: false });
-  }
+  onPhone(e: Event) { onPhoneInput(e, this.group().controls.phone); }
 
   focusField(f: Field) { document.getElementById(`${this.prefix()}-${f}`)?.focus(); }
   focusFirstInvalid() {

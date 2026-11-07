@@ -14,6 +14,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.function.Function;
@@ -29,7 +30,7 @@ public class CrmSyncService {
     private final LeadRepository leadRepository;
     private final CrmProvider activeProvider;
 
-    public CrmSyncService(java.util.List<CrmAdapter> adapters,
+    public CrmSyncService(List<CrmAdapter> adapters,
                            CrmSyncLogRepository crmSyncLogRepository,
                            LeadRepository leadRepository,
                            @Value("${lumina.crm.active-provider:HUBSPOT}") CrmProvider activeProvider) {
@@ -43,29 +44,19 @@ public class CrmSyncService {
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void syncLead(UUID leadId) {
         Lead lead = leadRepository.findById(leadId).orElseThrow(() -> new LeadNotFoundException(leadId));
+        CrmSyncLog.CrmSyncLogBuilder entry = CrmSyncLog.builder().lead(lead).crmProvider(activeProvider);
         CrmAdapter adapter = adaptersByProvider.get(activeProvider);
         if (adapter == null) {
             log.warn("No CrmAdapter registered for provider {}; lead {} stays PENDING", activeProvider, leadId);
-            crmSyncLogRepository.save(CrmSyncLog.builder().lead(lead).crmProvider(activeProvider)
-                    .syncStatus(SyncStatus.PENDING).build());
-            return;
+            entry.syncStatus(SyncStatus.PENDING);
+        } else {
+            try {
+                entry.syncStatus(SyncStatus.SUCCESS).externalCrmId(adapter.sendLead(lead));
+            } catch (Exception ex) {
+                log.warn("CRM sync failed for lead {} on provider {}: {}", leadId, activeProvider, ex.getMessage());
+                entry.syncStatus(SyncStatus.FAILURE);
+            }
         }
-
-        CrmSyncLog.CrmSyncLogBuilder logBuilder = CrmSyncLog.builder()
-                .lead(lead)
-                .crmProvider(activeProvider);
-
-        try {
-            String externalId = adapter.sendLead(lead);
-            crmSyncLogRepository.save(logBuilder
-                    .syncStatus(SyncStatus.SUCCESS)
-                    .externalCrmId(externalId)
-                    .build());
-        } catch (Exception ex) {
-            log.warn("CRM sync failed for lead {} on provider {}: {}", leadId, activeProvider, ex.getMessage());
-            crmSyncLogRepository.save(logBuilder
-                    .syncStatus(SyncStatus.FAILURE)
-                    .build());
-        }
+        crmSyncLogRepository.save(entry.build());
     }
 }

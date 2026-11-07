@@ -48,16 +48,17 @@ public class AdminBootstrap implements ApplicationRunner {
             log.warn("ADMIN_PASSWORD must have at least {} characters; first admin NOT created.", MIN_PASSWORD_LENGTH);
             return;
         }
+        String normalizedEmail = email.trim().toLowerCase();
         try {
             adminUserRepository.saveAndFlush(AdminUser.builder()
                     .name(name)
-                    .email(email.trim().toLowerCase())
+                    .email(normalizedEmail)
                     .passwordHash(passwordEncoder.encode(password))
                     .build());
         } catch (DataIntegrityViolationException ex) {
             log.info("First admin user was created by another instance");
             return;
         }
-        log.info("First admin user created for {}", email.trim().toLowerCase());
+        log.info("First admin user created for {}", normalizedEmail);
     }
 }

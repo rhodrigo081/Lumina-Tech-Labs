@@ -90,7 +90,7 @@ lumina:
       calendar-id: ${GOOGLE_CALENDAR_ID:primary}
 
   consent:
-    term-version: v1.0
+    term-version: v1.1
 
   rate-limit:
     enabled: ${RATE_LIMIT_ENABLED:true}
@@ -112,6 +112,10 @@ lumina:
   notification:
     mail-from: ${MAIL_FROM}
     sales-webhook-url: ${SALES_WEBHOOK_URL:}
+
+  contact:
+    # Inbox that receives the public contact form (defaults to MAIL_FROM).
+    recipient: ${CONTACT_EMAIL:}
 
 management:
   endpoints:

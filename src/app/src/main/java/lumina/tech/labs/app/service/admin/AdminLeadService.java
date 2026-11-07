@@ -6,8 +6,8 @@ import jakarta.persistence.criteria.Predicate;
 import lumina.tech.labs.app.dto.admin.AdminDashboardResponse;
 import lumina.tech.labs.app.dto.admin.AdminLeadDetailResponse;
 import lumina.tech.labs.app.dto.admin.AdminLeadSummaryResponse;
-import lumina.tech.labs.app.dto.admin.AdminMeetingInfo;
 import lumina.tech.labs.app.dto.admin.PageResponse;
+import lumina.tech.labs.app.dto.response.ScheduleResponse;
 import lumina.tech.labs.app.enums.Priority;
 import lumina.tech.labs.app.enums.ScheduleStatus;
 import lumina.tech.labs.app.enums.SlotStatus;
@@ -116,13 +116,8 @@ public class AdminLeadService {
                 toMeeting(lead.getSchedule()));
     }
 
-    private AdminMeetingInfo toMeeting(Schedule schedule) {
-        if (schedule == null) {
-            return null;
-        }
-        var r = scheduleService.toResponse(schedule);
-        return new AdminMeetingInfo(r.id(), r.technicianId(), r.technicianName(), r.meetingTime(), r.endTime(),
-                r.videoLink(), r.status());
+    private ScheduleResponse toMeeting(Schedule schedule) {
+        return schedule == null ? null : scheduleService.toResponse(schedule);
     }
 
     private static Specification<Lead> filter(String search, Priority priority, Boolean scheduled) {

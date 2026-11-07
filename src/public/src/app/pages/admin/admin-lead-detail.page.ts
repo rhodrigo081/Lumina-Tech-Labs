@@ -5,7 +5,7 @@ import { AdminApiService } from '../../core/admin/admin-api.service';
 import { AdminLeadDetail, MEETING_LABEL, PRIORITY_LABEL } from '../../core/admin/admin.models';
 import { dateTimeOf, timeOf } from '../../core/datetime';
 import { friendly } from '../../core/errors';
-import { INFRA_OPTIONS } from '../../core/infrastructure';
+import { infraLabel } from '../../core/infrastructure';
 import { ApiError } from '../../core/models';
 import { ToastService } from '../../core/state.services';
 import { ConfirmService } from '../../shared/confirm-dialog.component';
@@ -156,7 +156,7 @@ export class AdminLeadDetailPage implements OnInit {
     });
   }
 
-  infraLabel(code: string) { return INFRA_OPTIONS.find((o) => o.code === code)?.label ?? code; }
+  readonly infraLabel = infraLabel;
 
   async cancel(scheduleId: string) {
     const ok = await this.confirm.ask({
@@ -184,7 +184,7 @@ export class AdminLeadDetailPage implements OnInit {
           status === 'CANCELLED' ? 'O horário foi liberado na agenda.' : 'Status atualizado.');
         this.load();
       },
-      error: (e: ApiError) => { this.busy.set(false); const f = friendly(e, 'admin'); this.toast.show(f.title, f.message, 'error'); },
+      error: (e: ApiError) => { this.busy.set(false); this.toast.error(friendly(e, 'admin')); },
     });
   }
 }

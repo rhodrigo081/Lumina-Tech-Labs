@@ -6,6 +6,7 @@ import { API_BASE } from '../config';
 import { AdminSession } from './admin.models';
 
 const KEY = 'ecm.admin.session';
+export const LOGIN_URL = `${API_BASE}/admin/auth/login`;
 export const LOGOUT_URL = `${API_BASE}/admin/auth/logout`;
 
 @Injectable({ providedIn: 'root' })
@@ -32,11 +33,11 @@ export class AdminAuthService {
   }
 
   login(email: string, password: string) {
-    return this.http.post<AdminSession>(`${API_BASE}/admin/auth/login`, { email, password }).pipe(tap((s) => this.start(s)));
+    return this.http.post<AdminSession>(LOGIN_URL, { email, password }).pipe(tap((s) => this.start(s)));
   }
 
   logout(returnUrl?: string) {
-    if (this.token()) this.http.post(LOGOUT_URL, {}).subscribe({ error: () => { } });
+    if (this.token()) this.http.post(LOGOUT_URL, {}).subscribe({ error: () => {} });
     this.clear();
     this.router.navigate(['/admin/login'], { queryParams: returnUrl && returnUrl !== '/admin/login' ? { redirect: returnUrl } : {} });
   }

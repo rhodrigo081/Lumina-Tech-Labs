@@ -5,8 +5,6 @@ import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
 
 import java.time.Instant;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.UUID;
 
 @Entity
@@ -35,9 +33,4 @@ public class Company {
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)
     private Instant createdAt;
-
-    @OneToMany(mappedBy = "company", cascade = CascadeType.ALL, orphanRemoval = false, fetch = FetchType.LAZY)
-    @Builder.Default
-    @ToString.Exclude
-    private List<Lead> leads = new ArrayList<>();
 }

@@ -59,6 +59,6 @@ class LeadCompanyGroupingTest {
     private static LeadCaptureRequest request(String email, String company) {
         return new LeadCaptureRequest("Pessoa Teste", email, "(81) 99999-0001", "Gerente", company,
                 new DiagnosticInputRequest(new BigDecimal("500"), 20, new BigDecimal("8000"), "STANDARD_CORPORATE_BUILDING"),
-                new ConsentRequest("v1.0", true));
+                new ConsentRequest("v1.1", true));
     }
 }

@@ -10,7 +10,7 @@ import { FriendlyError, friendly } from '../core/errors';
 import { ApiError, LeadRequest } from '../core/models';
 import { JourneyStore, ToastService } from '../core/state.services';
 import { ReportSection, parseReportText } from '../core/report-text';
-import { uuid, whatsappUrl } from '../core/utils';
+import { shortId, uuid, whatsappUrl } from '../core/utils';
 import { IdentificationFormComponent, buildIdentificationGroup } from '../shared/identification-form.component';
 import { LoadingButtonComponent } from '../shared/loading-button.component';
 import { LegalModalComponent } from '../shared/legal-modal.component';
@@ -387,7 +387,7 @@ export class RelatorioPage {
     });
   }
 
-  readonly shortId = computed(() => (this.report()?.id ?? '').slice(0, 8).toUpperCase());
+  readonly shortId = computed(() => shortId(this.report()?.id));
   readonly monthly = computed(() => (this.report()?.diagnostic.annualSavings ?? 0) / 12);
   readonly annualCost = computed(() => (this.report()?.diagnostic.monthlyEnergyBill ?? 0) * 12);
   readonly optimizedCost = computed(() => this.annualCost() - (this.report()?.diagnostic.annualSavings ?? 0));
@@ -422,15 +422,9 @@ export class RelatorioPage {
   accent = (i: number) => RelatorioPage.ACCENTS[i % RelatorioPage.ACCENTS.length];
   isCarbon = (label: string) => /co₂|co2|carbono/i.test(label);
 
-  async copyFull() {
+  copyFull() {
     const text = this.full().text;
-    if (!text) return;
-    try {
-      await navigator.clipboard.writeText(text);
-      this.toast.show('Relatório copiado', 'O texto completo está na sua área de transferência.');
-    } catch {
-      this.toast.show('Não foi possível copiar', 'Selecione o texto e copie manualmente.', 'error');
-    }
+    if (text) this.toast.copy(text, 'Relatório copiado', 'O texto completo está na sua área de transferência.');
   }
 
   loadFull() {

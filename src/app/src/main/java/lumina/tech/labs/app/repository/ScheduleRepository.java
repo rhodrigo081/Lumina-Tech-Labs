@@ -15,8 +15,6 @@ public interface ScheduleRepository extends JpaRepository<Schedule, UUID> {
 
     Optional<Schedule> findByLeadId(UUID leadId);
 
-    boolean existsByLeadId(UUID leadId);
-
     @EntityGraph(attributePaths = {"lead", "technician", "slot"})
     Optional<Schedule> findDetailedById(UUID id);
 

@@ -7,6 +7,9 @@ export const INFRA_OPTIONS = [
   { code: 'PARTIAL_RETROFIT', label: 'Retrofit parcial já implementado (Apenas automação pendente)' },
 ];
 
+const INFRA_LABELS = new Map(INFRA_OPTIONS.map((o) => [o.code, o.label]));
+export const infraLabel = (code: string) => INFRA_LABELS.get(code) ?? code;
+
 export const DEFAULT_INPUT: DiagnosticInput = { areaM2: 1200.5, workstations: 80, monthlyEnergyBill: 18000, currentInfrastructure: INFRA_OPTIONS[0].code };
 
 export const LIMITS = {

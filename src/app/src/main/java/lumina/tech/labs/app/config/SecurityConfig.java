@@ -17,6 +17,7 @@ import org.springframework.security.oauth2.jwt.JwtClaimNames;
 import org.springframework.security.oauth2.jwt.JwtClaimValidator;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
+import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -28,6 +29,7 @@ import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.security.oauth2.jwt.NimbusJwtEncoder;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
 import org.springframework.security.oauth2.server.resource.authentication.JwtGrantedAuthoritiesConverter;
+import org.springframework.security.web.AuthenticationEntryPoint;
 import org.springframework.security.web.SecurityFilterChain;
 
 import javax.crypto.SecretKey;
@@ -45,9 +47,11 @@ public class SecurityConfig {
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http,
                                                    JwtAuthenticationConverter jwtAuthenticationConverter) throws Exception {
+        AuthenticationEntryPoint unauthorized = (req, res, ex) ->
+                ErrorResponses.write(req, res, HttpStatus.UNAUTHORIZED, "UNAUTHORIZED", "Authentication required");
         http
                 .cors(cors -> {})
-                .csrf(csrf -> csrf.disable())
+                .csrf(AbstractHttpConfigurer::disable)
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
@@ -58,11 +62,9 @@ public class SecurityConfig {
                         .anyRequest().denyAll())
                 .oauth2ResourceServer(oauth -> oauth
                         .jwt(jwt -> jwt.jwtAuthenticationConverter(jwtAuthenticationConverter))
-                        .authenticationEntryPoint((req, res, ex) ->
-                                ErrorResponses.write(req, res, HttpStatus.UNAUTHORIZED, "UNAUTHORIZED", "Authentication required")))
+                        .authenticationEntryPoint(unauthorized))
                 .exceptionHandling(ex -> ex
-                        .authenticationEntryPoint((req, res, e) ->
-                                ErrorResponses.write(req, res, HttpStatus.UNAUTHORIZED, "UNAUTHORIZED", "Authentication required"))
+                        .authenticationEntryPoint(unauthorized)
                         .accessDeniedHandler((req, res, e) ->
                                 ErrorResponses.write(req, res, HttpStatus.FORBIDDEN, "FORBIDDEN", "Access denied")));
 

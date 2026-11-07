@@ -7,7 +7,6 @@ import lumina.tech.labs.app.dto.request.LeadCaptureRequest;
 import lumina.tech.labs.app.dto.response.DiagnosticResponse;
 import lumina.tech.labs.app.dto.response.LeadResponse;
 import lumina.tech.labs.app.engine.DiagnosticCalculationStrategy;
-import lumina.tech.labs.app.engine.DiagnosticEstimate;
 import lumina.tech.labs.app.service.LeadService;
 import lumina.tech.labs.app.service.ReportService;
 import org.springframework.http.MediaType;
@@ -45,10 +44,7 @@ public class LeadController {
 
     @PostMapping("/diagnostics/preview")
     public ResponseEntity<DiagnosticResponse> previewDiagnostic(@Valid @RequestBody DiagnosticInputRequest request) {
-        DiagnosticEstimate estimate = diagnosticCalculationStrategy.calculate(request);
-        return ResponseEntity.ok(DiagnosticResponse.preview(
-                estimate.consumptionReductionPct(), estimate.annualSavings(),
-                estimate.paybackMonths(), estimate.co2ReductionTons()));
+        return ResponseEntity.ok(DiagnosticResponse.preview(diagnosticCalculationStrategy.calculate(request)));
     }
 
     @GetMapping("/leads/{id}/report")

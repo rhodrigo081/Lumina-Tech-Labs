@@ -78,10 +78,6 @@ public interface AvailabilitySlotRepository extends JpaRepository<AvailabilitySl
               @Param("notBefore") Instant notBefore);
 
     @Modifying(flushAutomatically = true, clearAutomatically = true)
-    @Query("update AvailabilitySlot s set s.status = :status where s.id = :id")
-    int updateStatus(@Param("id") UUID id, @Param("status") SlotStatus status);
-
-    @Modifying(flushAutomatically = true, clearAutomatically = true)
     @Query("delete from AvailabilitySlot s where s.id = :id and s.status = :available")
     int deleteIfOpen(@Param("id") UUID id, @Param("available") SlotStatus available);
 

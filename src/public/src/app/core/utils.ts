@@ -8,9 +8,6 @@ export const notBlank = (c: AbstractControl): ValidationErrors | null =>
 
 export const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
-const GENERIC_DOMAINS = ['gmail.com', 'hotmail.com', 'yahoo.com', 'yahoo.com.br', 'outlook.com', 'live.com', 'bol.com.br', 'uol.com.br'];
-
-export const isGenericDomain = (email: string) => GENERIC_DOMAINS.includes((email.split('@')[1] ?? '').toLowerCase().trim());
 export const fmtNum = (v: number, d = 2) => new Intl.NumberFormat('pt-BR', { minimumFractionDigits: d, maximumFractionDigits: d }).format(v);
 export const parseCents = (raw: string) => parseInt(raw.replace(/\D/g, '').slice(0, 10) || '0', 10) / 100;
 
@@ -19,6 +16,26 @@ export function maskPhone(v: string): string {
   const m = d.length <= 10 ? d.replace(/^(\d{2})(\d{4})(\d{0,4})/, '($1) $2-$3') : d.replace(/^(\d{2})(\d{5})(\d{0,4})/, '($1) $2-$3');
   return m.replace(/-$/, '');
 }
+
+/** `(input)` handler: masks the typed phone and stores it without re-emitting valueChanges. */
+export function onPhoneInput(e: Event, control: AbstractControl<string>) {
+  const el = e.target as HTMLInputElement;
+  el.value = maskPhone(el.value);
+  control.setValue(el.value, { emitEvent: false });
+}
+
+/** Message for the first validation error of a touched control (null when valid or untouched). */
+export function fieldError(c: AbstractControl, minLengthMessage = 'Texto muito curto.'): string | null {
+  if (!c.invalid || !c.touched) return null;
+  if (c.hasError('required')) return 'Campo obrigatório.';
+  if (c.hasError('email') || c.hasError('pattern')) return 'Informe um e-mail válido.';
+  if (c.hasError('maxlength')) return `Máximo de ${c.getError('maxlength').requiredLength} caracteres.`;
+  if (c.hasError('minlength')) return minLengthMessage;
+  return 'Valor inválido.';
+}
+
+export const shortId = (id: string | null | undefined) => (id ?? '').slice(0, 8).toUpperCase();
+export const initials = (name: string) => name.trim().split(/\s+/).slice(0, 2).map((p) => p[0]?.toUpperCase() ?? '').join('');
 
 export const whatsappUrl = (text: string) =>
   `${WHATSAPP_NUMBER ? 'https://wa.me/' + WHATSAPP_NUMBER : 'https://api.whatsapp.com/send'}?text=${encodeURIComponent(text)}`;

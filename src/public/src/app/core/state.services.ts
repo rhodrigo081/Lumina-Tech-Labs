@@ -1,6 +1,7 @@
 import { Injectable, computed, effect, signal } from '@angular/core';
 import { BookingRecord, DiagnosticInput, Identification, LeadResponse } from './models';
 import { DEFAULT_INPUT } from './infrastructure';
+import { FriendlyError } from './errors';
 
 const KEY = 'ecm.session.v1';
 
@@ -44,7 +45,6 @@ export class JourneyStore {
 export class LoadingService {
   private readonly count = signal(0);
   readonly active = computed(() => this.count() > 0);
-  readonly pending = this.count.asReadonly();
   inc() { this.count.update((n) => n + 1); }
   dec() { this.count.update((n) => Math.max(0, n - 1)); }
 }
@@ -60,5 +60,11 @@ export class ToastService {
     this.toast.set({ title, message, tone });
     this.timer = setTimeout(() => this.dismiss(), 5000);
   }
+  error(e: FriendlyError) { this.show(e.title, e.message, 'error'); }
   dismiss() { this.toast.set(null); }
+
+  async copy(text: string, title: string, message: string) {
+    try { await navigator.clipboard.writeText(text); this.show(title, message); }
+    catch { this.show('Não foi possível copiar', 'Selecione o texto e copie manualmente.', 'error'); }
+  }
 }

@@ -9,7 +9,6 @@ import lumina.tech.labs.app.model.Diagnostic;
 import lumina.tech.labs.app.model.Lead;
 import lumina.tech.labs.app.event.LeadQualifiedEvent;
 import lumina.tech.labs.app.engine.DiagnosticCalculationStrategy;
-import lumina.tech.labs.app.engine.DiagnosticEstimate;
 import lumina.tech.labs.app.engine.ScoringEngine;
 import lumina.tech.labs.app.exception.DuplicateLeadException;
 import lumina.tech.labs.app.exception.LeadNotFoundException;
@@ -18,10 +17,10 @@ import lumina.tech.labs.app.repository.LeadRepository;
 import lumina.tech.labs.app.exception.ApiException;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.ApplicationEventPublisher;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Optional;
 import java.util.UUID;
 
 @Service
@@ -43,7 +42,7 @@ public class LeadService {
                         LeadMapper leadMapper,
                         IdempotencyService idempotencyService,
                         ApplicationEventPublisher eventPublisher,
-                        @Value("${lumina.consent.term-version:v1.0}") String currentTermVersion) {
+                        @Value("${lumina.consent.term-version:v1.1}") String currentTermVersion) {
         this.currentTermVersion = currentTermVersion;
         this.leadRepository = leadRepository;
         this.companyRepository = companyRepository;
@@ -60,13 +59,13 @@ public class LeadService {
         if (idempotencyKey != null) {
             IdempotencyService.Result idempotency = idempotencyService.begin("lead", idempotencyKey);
             if (idempotency.completedResourceId().isPresent()) {
-                return toResponse(getLeadOrThrow(idempotency.completedResourceId().get()));
+                return leadMapper.toResponse(getLeadOrThrow(idempotency.completedResourceId().get()));
             }
             reservation = idempotency.reservation();
         }
 
         if (!currentTermVersion.equals(request.consent().termVersion())) {
-            throw new ApiException(HttpStatus.BAD_REQUEST, "TERMS_VERSION_MISMATCH",
+            throw ApiException.badRequest("TERMS_VERSION_MISMATCH",
                     "The terms of use were updated. Reload the page and accept the current version.");
         }
 
@@ -75,14 +74,10 @@ public class LeadService {
             throw new DuplicateLeadException(email);
         }
 
-        Company company = findOrCreateCompany(request.companyName(), extractDomain(email));
+        Company company = findOrCreateCompany(request.companyName(), email.substring(email.indexOf('@') + 1));
 
-        Diagnostic diagnostic = leadMapper.toEntity(request.diagnostic());
-        DiagnosticEstimate estimate = diagnosticCalculationStrategy.calculate(request.diagnostic());
-        diagnostic.setConsumptionReductionPct(estimate.consumptionReductionPct());
-        diagnostic.setAnnualSavings(estimate.annualSavings());
-        diagnostic.setPaybackMonths(estimate.paybackMonths());
-        diagnostic.setCo2ReductionTons(estimate.co2ReductionTons());
+        Diagnostic diagnostic = leadMapper.toEntity(request.diagnostic(),
+                diagnosticCalculationStrategy.calculate(request.diagnostic()));
 
         Lead lead = Lead.builder()
                 .company(company)
@@ -94,27 +89,19 @@ public class LeadService {
                 .build();
         lead.assignDiagnostic(diagnostic);
 
-        ConsentLog consent = ConsentLog.builder()
+        lead.addConsentLog(ConsentLog.builder()
                 .termVersion(request.consent().termVersion())
                 .sourceIp(sourceIp)
-                .build();
-        lead.addConsentLog(consent);
+                .build());
 
         Lead saved = leadRepository.saveAndFlush(lead);
         if (reservation != null) {
             reservation.complete(saved.getId());
         }
 
-        eventPublisher.publishEvent(new LeadQualifiedEvent(saved.getId(), saved.getPriority()));
+        eventPublisher.publishEvent(new LeadQualifiedEvent(saved.getId()));
 
-        return toResponse(saved);
-    }
-
-    public LeadResponse toResponse(Lead lead) {
-        LeadResponse response = leadMapper.toResponse(lead);
-        return new LeadResponse(response.id(), response.fullName(), response.corporateEmail(),
-                response.companyName(), response.priority(), response.createdAt(), response.diagnostic(),
-                "/api/v1/leads/" + lead.getId() + "/report");
+        return leadMapper.toResponse(saved);
     }
 
     @Transactional(readOnly = true)
@@ -123,16 +110,12 @@ public class LeadService {
                 .orElseThrow(() -> new LeadNotFoundException(leadId));
     }
 
+    /** Leads with a personal email (gmail.com...) never share a company; corporate domains do. */
     private Company findOrCreateCompany(String companyName, String emailDomain) {
-        if (EmailDomains.isPersonal(emailDomain)) {
-            return companyRepository.save(Company.builder().name(companyName.trim()).emailDomain(emailDomain).build());
-        }
-        return companyRepository.findFirstByEmailDomainOrderByCreatedAtAsc(emailDomain)
+        return (EmailDomains.isPersonal(emailDomain)
+                ? Optional.<Company>empty()
+                : companyRepository.findFirstByEmailDomainOrderByCreatedAtAsc(emailDomain))
                 .orElseGet(() -> companyRepository.save(
                         Company.builder().name(companyName.trim()).emailDomain(emailDomain).build()));
-    }
-
-    private String extractDomain(String email) {
-        return email.substring(email.indexOf('@') + 1).toLowerCase().trim();
     }
 }

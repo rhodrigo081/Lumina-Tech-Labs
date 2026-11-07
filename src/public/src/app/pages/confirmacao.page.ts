@@ -4,11 +4,11 @@ import { RouterLink } from '@angular/router';
 import { BookingRecord } from '../core/models';
 import { JourneyStore, ToastService } from '../core/state.services';
 import { addMinutes, brDateOf, compactUtc, dayKey, timeOf } from '../core/datetime';
-import { whatsappUrl } from '../core/utils';
+import { initials, shortId, whatsappUrl } from '../core/utils';
 import { ErrorCardComponent } from '../shared/error-card.component';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const STATUS: Record<string, string> = { SCHEDULED: 'Agendado', CONFIRMED: 'Confirmado', CANCELLED: 'Cancelado', COMPLETED: 'Concluído' };
+const STATUS: Record<string, string> = { SCHEDULED: 'Agendado', CANCELLED: 'Cancelado', COMPLETED: 'Concluído' };
 
 @Component({
   selector: 'ecm-confirmacao',
@@ -149,7 +149,7 @@ export class ConfirmacaoPage {
   readonly report = this.store.report;
   readonly lead = this.store.lead;
 
-  readonly shortId = computed(() => this.protocol().slice(0, 8).toUpperCase());
+  readonly shortId = computed(() => shortId(this.protocol()));
   readonly cancelled = computed(() => (this.b()?.status ?? '').toUpperCase() === 'CANCELLED');
   readonly statusLabel = computed(() => STATUS[(this.b()?.status ?? '').toUpperCase()] ?? this.b()?.status ?? '—');
   readonly startTime = computed(() => timeOf(this.b()!.meetingTime));
@@ -157,7 +157,7 @@ export class ConfirmacaoPage {
   readonly endTime = computed(() => timeOf(this.endIso()));
   readonly dateLabel = computed(() => brDateOf(dayKey(this.b()!.meetingTime)));
   readonly host = computed(() => (this.b()?.videoLink ?? '').replace(/^https?:\/\//, ''));
-  readonly initials = computed(() => this.lead().name.trim().split(/\s+/).slice(0, 2).map((p) => p[0]?.toUpperCase() ?? '').join(''));
+  readonly initials = computed(() => initials(this.lead().name));
   readonly responsible = computed(() => { const r = this.b()?.sdrAssigned?.trim(); return r && !UUID.test(r) ? r : null; });
 
   readonly checklist = [
@@ -178,10 +178,7 @@ export class ConfirmacaoPage {
     return 'https://calendar.google.com/calendar/render?' + q.toString();
   });
 
-  async copy(text: string, ok: string) {
-    try { await navigator.clipboard.writeText(text); this.toast.show('Copiado', ok); }
-    catch { this.toast.show('Não foi possível copiar', 'Copie manualmente o texto exibido na tela.', 'error'); }
-  }
+  copy(text: string, ok: string) { this.toast.copy(text, 'Copiado', ok); }
 
   downloadIcs() {
     const b = this.b()!;

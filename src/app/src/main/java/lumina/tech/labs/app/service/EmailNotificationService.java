@@ -18,7 +18,6 @@ import org.springframework.web.client.RestClient;
 import java.nio.charset.StandardCharsets;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
-import java.util.Locale;
 import java.util.Map;
 
 @Service
@@ -43,7 +42,7 @@ public class EmailNotificationService implements NotificationService {
         this.restClient = RestClient.create();
         this.salesWebhookUrl = salesWebhookUrl;
         this.mailFrom = mailFrom;
-        this.meetingFormat = DateTimeFormatter.ofPattern("dd/MM/yyyy 'às' HH:mm '(horário de Brasília)'", Locale.forLanguageTag("pt-BR"))
+        this.meetingFormat = DateTimeFormatter.ofPattern("dd/MM/yyyy 'às' HH:mm '(horário de Brasília)'", ReportFormat.PT_BR)
                 .withZone(zone);
     }
 

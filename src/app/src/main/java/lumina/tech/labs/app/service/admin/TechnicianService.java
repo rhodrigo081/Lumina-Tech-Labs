@@ -27,26 +27,24 @@ public class TechnicianService {
 
     @Transactional
     public TechnicianResponse create(TechnicianRequest request) {
-        String email = request.email().trim().toLowerCase();
+        String email = normalizedEmail(request);
         if (technicianRepository.existsByEmailIgnoreCase(email)) {
-            throw ApiException.conflict("TECHNICIAN_EMAIL_IN_USE", "A technician with this email already exists");
+            throw emailInUse();
         }
-        Technician technician = Technician.builder()
-                .name(request.name().trim())
-                .email(email)
-                .specialty(blankToNull(request.specialty()))
-                .active(request.active() == null || request.active())
-                .build();
-        return toResponse(technicianRepository.saveAndFlush(technician));
+        return save(Technician.builder().build(), request, email);
     }
 
     @Transactional
     public TechnicianResponse update(UUID id, TechnicianRequest request) {
         Technician technician = getOrThrow(id);
-        String email = request.email().trim().toLowerCase();
+        String email = normalizedEmail(request);
         if (technicianRepository.existsByEmailIgnoreCaseAndIdNot(email, id)) {
-            throw ApiException.conflict("TECHNICIAN_EMAIL_IN_USE", "A technician with this email already exists");
+            throw emailInUse();
         }
+        return save(technician, request, email);
+    }
+
+    private TechnicianResponse save(Technician technician, TechnicianRequest request, String email) {
         technician.setName(request.name().trim());
         technician.setEmail(email);
         technician.setSpecialty(blankToNull(request.specialty()));
@@ -56,12 +54,20 @@ public class TechnicianService {
         return toResponse(technicianRepository.saveAndFlush(technician));
     }
 
+    private static String normalizedEmail(TechnicianRequest request) {
+        return request.email().trim().toLowerCase();
+    }
+
+    private static ApiException emailInUse() {
+        return ApiException.conflict("TECHNICIAN_EMAIL_IN_USE", "A technician with this email already exists");
+    }
+
     public Technician getOrThrow(UUID id) {
         return technicianRepository.findById(id)
                 .orElseThrow(() -> ApiException.notFound("TECHNICIAN_NOT_FOUND", "Technician not found: " + id));
     }
 
-    static TechnicianResponse toResponse(Technician t) {
+    private static TechnicianResponse toResponse(Technician t) {
         return new TechnicianResponse(t.getId(), t.getName(), t.getEmail(), t.getSpecialty(), t.isActive(), t.getCreatedAt());
     }
 

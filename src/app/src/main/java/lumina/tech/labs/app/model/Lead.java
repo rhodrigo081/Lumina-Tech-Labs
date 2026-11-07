@@ -67,11 +67,6 @@ public class Lead {
     @ToString.Exclude
     private List<ConsentLog> consentLogs = new ArrayList<>();
 
-    @OneToMany(mappedBy = "lead", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
-    @Builder.Default
-    @ToString.Exclude
-    private List<CrmSyncLog> crmSyncLogs = new ArrayList<>();
-
     public void assignDiagnostic(Diagnostic diagnostic) {
         this.diagnostic = diagnostic;
         diagnostic.setLead(this);

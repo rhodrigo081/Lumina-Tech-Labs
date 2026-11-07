@@ -1,5 +1,6 @@
 package lumina.tech.labs.app.dto.admin;
 
+import lumina.tech.labs.app.dto.response.ScheduleResponse;
 import lumina.tech.labs.app.dto.response.DiagnosticResponse;
 import lumina.tech.labs.app.enums.CrmProvider;
 import lumina.tech.labs.app.enums.Priority;
@@ -20,7 +21,7 @@ public record AdminLeadDetailResponse(
         Priority priority,
         Instant createdAt,
         DiagnosticResponse diagnostic,
-        AdminMeetingInfo meeting,
+        ScheduleResponse meeting,
         List<Consent> consents,
         List<CrmSync> crmSyncs
 ) {

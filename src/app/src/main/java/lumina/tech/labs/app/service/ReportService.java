@@ -8,34 +8,29 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
-import java.text.NumberFormat;
+import java.math.RoundingMode;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
-import java.util.Locale;
 import java.util.UUID;
+
+import static lumina.tech.labs.app.service.ReportFormat.currency;
 
 @Service
 public class ReportService {
-
-    private static final Locale PT_BR = Locale.forLanguageTag("pt-BR");
 
     private final LeadService leadService;
     private final DateTimeFormatter dateFormat;
 
     public ReportService(LeadService leadService, @Value("${lumina.scheduling.zone:America/Sao_Paulo}") ZoneId zone) {
         this.leadService = leadService;
-        this.dateFormat = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm", PT_BR).withZone(zone);
+        this.dateFormat = ReportFormat.dateTime(zone);
     }
 
     @Transactional(readOnly = true)
     public String buildTextReport(UUID leadId) {
         Lead lead = leadService.getLeadOrThrow(leadId);
         Diagnostic d = lead.getDiagnostic();
-        NumberFormat money = NumberFormat.getCurrencyInstance(PT_BR);
-        NumberFormat number = NumberFormat.getNumberInstance(PT_BR);
-        number.setMaximumFractionDigits(2);
-
-        BigDecimal monthlySavings = d.getAnnualSavings().divide(BigDecimal.valueOf(12), 2, java.math.RoundingMode.HALF_UP);
+        BigDecimal monthlySavings = d.getAnnualSavings().divide(BigDecimal.valueOf(12), 2, RoundingMode.HALF_UP);
 
         return String.join("\n",
                 "RELATÓRIO DE DIAGNÓSTICO ENERGÉTICO — LUMINA TECH LABS",
@@ -48,19 +43,23 @@ public class ReportService {
                 "  E-mail:       " + lead.getCorporateEmail(),
                 "",
                 "DADOS INFORMADOS",
-                "  Área:                    " + number.format(d.getAreaM2()) + " m²",
+                "  Área:                    " + number(d.getAreaM2()) + " m²",
                 "  Estações de trabalho:    " + d.getWorkstations(),
-                "  Fatura mensal de energia: " + money.format(d.getMonthlyEnergyBill()),
+                "  Fatura mensal de energia: " + currency(d.getMonthlyEnergyBill()),
                 "  Infraestrutura atual:    " + InfrastructureProfile.labelOf(d.getCurrentInfrastructure()),
                 "",
                 "RESULTADOS ESTIMADOS",
-                "  Redução de consumo:      " + number.format(d.getConsumptionReductionPct()) + "%",
-                "  Economia mensal:         " + money.format(monthlySavings),
-                "  Economia anual:          " + money.format(d.getAnnualSavings()),
-                "  Payback estimado:        " + number.format(d.getPaybackMonths()) + " meses",
-                "  CO₂ evitado por ano:     " + number.format(d.getCo2ReductionTons()) + " t",
+                "  Redução de consumo:      " + number(d.getConsumptionReductionPct()) + "%",
+                "  Economia mensal:         " + currency(monthlySavings),
+                "  Economia anual:          " + currency(d.getAnnualSavings()),
+                "  Payback estimado:        " + number(d.getPaybackMonths()) + " meses",
+                "  CO₂ evitado por ano:     " + number(d.getCo2ReductionTons()) + " t",
                 "",
                 "Valores estimados a partir dos dados informados. A validação técnica é feita na sessão de diagnóstico",
                 "com a equipe da Lumina Tech Labs.");
+    }
+
+    private static String number(BigDecimal value) {
+        return ReportFormat.number(value, 0, 2);
     }
 }

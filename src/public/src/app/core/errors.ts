@@ -23,8 +23,6 @@ export function friendly(e: ApiError, ctx: ErrorContext): FriendlyError {
       if (e.status === 404) return { title: 'Diagnóstico não encontrado', message: 'Não localizamos o seu cadastro. Refaça o diagnóstico para continuar.' };
       if (e.status === 400 || e.status === 422) return { title: 'Não foi possível agendar', message: e.message || 'Os dados do agendamento não foram aceitos.', details };
       break;
-    case 'slots':
-      break;
     case 'admin':
       if (e.status === 401) return { title: 'Sessão expirada', message: 'Entre novamente para continuar.' };
       if (e.status === 403) return { title: 'Acesso negado', message: 'Seu usuário não tem permissão para esta ação.' };

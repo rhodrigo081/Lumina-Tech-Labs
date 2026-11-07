@@ -1,17 +1,15 @@
-import { INFRA_OPTIONS } from './infrastructure';
+import { infraLabel } from './infrastructure';
 
 export interface ReportRow { label: string; value: string; }
 export interface ReportSection { key: string; title: string; rows: ReportRow[]; }
 export interface ParsedReport { title: string; meta: ReportRow[]; sections: ReportSection[]; notes: string[]; }
-
-const INFRA_LABELS = new Map(INFRA_OPTIONS.map((o) => [o.code, o.label]));
 
 function splitRow(line: string): ReportRow | null {
   const i = line.indexOf(':');
   if (i <= 0) return null;
   const label = line.slice(0, i).trim();
   const raw = line.slice(i + 1).trim();
-  return { label, value: INFRA_LABELS.get(raw) ?? raw };
+  return { label, value: infraLabel(raw) };
 }
 
 const isHeading = (line: string) => /[A-ZÀ-Ý]/.test(line) && line === line.toUpperCase() && !line.includes(':');

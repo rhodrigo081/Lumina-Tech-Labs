@@ -21,20 +21,19 @@ import java.io.InputStream;
 import java.io.UncheckedIOException;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
-import java.text.NumberFormat;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 
+import static lumina.tech.labs.app.service.ReportFormat.currency;
+import static lumina.tech.labs.app.service.ReportFormat.shortId;
+
 @Service
 public class PdfReportService {
-
-    private static final Locale PT_BR = Locale.forLanguageTag("pt-BR");
 
     private static final Color PRIMARY = rgb(12, 50, 64);
     private static final Color PRIMARY_CONTAINER = rgb(38, 72, 87);
@@ -65,7 +64,7 @@ public class PdfReportService {
 
     public PdfReportService(LeadService leadService, @Value("${lumina.scheduling.zone:America/Sao_Paulo}") ZoneId zone) {
         this.leadService = leadService;
-        this.dateTimeFormat = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm", PT_BR).withZone(zone);
+        this.dateTimeFormat = ReportFormat.dateTime(zone);
     }
 
     public static String fileName(UUID leadId) {
@@ -102,7 +101,6 @@ public class PdfReportService {
         private final PDType0Font fBold;
         private final PDType0Font fExtraBold;
         private final Map<PDType0Font, Map<Integer, String>> glyphCache = new HashMap<>();
-        private final NumberFormat money = NumberFormat.getCurrencyInstance(PT_BR);
 
         Writer(PDDocument doc, PDPageContentStream cs) throws IOException {
             this.cs = cs;
@@ -381,19 +379,8 @@ public class PdfReportService {
             cs.restoreGraphicsState();
         }
 
-        private String currency(BigDecimal v) {
-            return money.format(v);
-        }
-
-        private String currency(double v) {
-            return money.format(v);
-        }
-
         private String number(BigDecimal v, int decimals) {
-            NumberFormat nf = NumberFormat.getNumberInstance(PT_BR);
-            nf.setMinimumFractionDigits(decimals);
-            nf.setMaximumFractionDigits(decimals);
-            return nf.format(v);
+            return ReportFormat.number(v, decimals, decimals);
         }
     }
 
@@ -403,10 +390,6 @@ public class PdfReportService {
 
     private static Color withAlpha(Color c) {
         return new Color((c.getRed() + 255) / 2, (c.getGreen() + 255) / 2, (c.getBlue() + 255) / 2);
-    }
-
-    private static String shortId(UUID id) {
-        return id.toString().substring(0, 8).toUpperCase(Locale.ROOT);
     }
 
     private static Color rgb(int r, int g, int b) {

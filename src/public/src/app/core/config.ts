@@ -3,7 +3,7 @@ import { environment } from '../../environments/environment';
 
 export const API_BASE = `${environment.apiOrigin}/api/v1`;
 
-export const TERMS_VERSION = 'v1.0';
+export const TERMS_VERSION = 'v1.1';
 
 export const WHATSAPP_NUMBER = '';
 

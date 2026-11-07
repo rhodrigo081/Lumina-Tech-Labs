@@ -56,9 +56,9 @@ const STORAGE_KEY = 'ecm.sidebar.collapsed';
             </button>
           }
         </div>
-        <button type="button" (click)="theme.cycle()" [attr.aria-label]="'Tema: ' + currentLabel() + '. Clique para alternar'" [attr.title]="'Tema: ' + currentLabel()"
+        <button type="button" (click)="theme.cycle()" [attr.aria-label]="'Tema: ' + current().label + '. Clique para alternar'" [attr.title]="'Tema: ' + current().label"
           class="hidden items-center justify-center h-11 rounded-lg text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-colors" [class]="collapsed() ? 'lg:flex' : ''">
-          <span class="material-symbols-outlined text-[22px]" aria-hidden="true">{{ currentIcon() }}</span>
+          <span class="material-symbols-outlined text-[22px]" aria-hidden="true">{{ current().icon }}</span>
         </button>
         <button type="button" (click)="toggle()" [attr.aria-expanded]="!collapsed()" aria-controls="sidebar"
           [attr.aria-label]="collapsed() ? 'Expandir menu' : 'Recolher menu'" [attr.title]="collapsed() ? 'Expandir menu' : null"
@@ -103,8 +103,7 @@ export class ShellComponent {
     { mode: 'light', label: 'claro', icon: 'light_mode' },
     { mode: 'dark', label: 'escuro', icon: 'dark_mode' },
   ];
-  readonly currentIcon = computed(() => this.themes.find((t) => t.mode === this.theme.mode())!.icon);
-  readonly currentLabel = computed(() => this.themes.find((t) => t.mode === this.theme.mode())!.label);
+  readonly current = computed(() => this.themes.find((t) => t.mode === this.theme.mode())!);
 
   readonly mobileOpen = signal(false);
   readonly collapsed = signal(this.initialCollapsed());
@@ -112,7 +111,7 @@ export class ShellComponent {
   readonly nav = computed(() => {
     const items = [
       { label: 'Diagnóstico', icon: 'calculate', link: '/diagnostico' },
-      { label: 'Agendamento', icon: 'calendar_month', link: `/agendamento` },
+      { label: 'Agendamento', icon: 'calendar_month', link: '/agendamento' },
     ];
     const b = this.store.booking();
     if (b) items.push({ label: 'Confirmação', icon: 'event_available', link: `/confirmacao/${b.protocol}` });

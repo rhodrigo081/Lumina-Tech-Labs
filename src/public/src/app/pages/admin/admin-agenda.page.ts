@@ -280,7 +280,7 @@ export class AdminAgendaPage implements OnInit {
         const active = t.filter((x) => x.active);
         if (active.length === 1) this.form.controls.technicianId.setValue(active[0].id);
       },
-      error: (e: ApiError) => { const f = friendly(e, 'admin'); this.toast.show(f.title, f.message, 'error'); },
+      error: (e: ApiError) => { this.toast.error(friendly(e, 'admin')); },
     });
     this.loadWeek();
   }
@@ -323,7 +323,7 @@ export class AdminAgendaPage implements OnInit {
         if (created) this.monday.set(mondayOf(dayKey(r.created[0].startTime)));
         this.loadWeek();
       },
-      error: (e: ApiError) => { this.creating.set(false); const f = friendly(e, 'admin'); this.toast.show(f.title, f.message, 'error'); },
+      error: (e: ApiError) => { this.creating.set(false); this.toast.error(friendly(e, 'admin')); },
     });
   }
 
@@ -337,7 +337,7 @@ export class AdminAgendaPage implements OnInit {
     this.busyId.set(s.id);
     this.api.deleteSlot(s.id).subscribe({
       next: () => { this.busyId.set(null); this.slots.update((all) => all.filter((x) => x.id !== s.id)); this.toast.show('Horário removido', when); },
-      error: (e: ApiError) => { this.busyId.set(null); const f = friendly(e, 'admin'); this.toast.show(f.title, f.message, 'error'); this.loadWeek(); },
+      error: (e: ApiError) => { this.busyId.set(null); this.toast.error(friendly(e, 'admin')); this.loadWeek(); },
     });
   }
 
@@ -352,7 +352,7 @@ export class AdminAgendaPage implements OnInit {
     this.busyId.set(s.id);
     this.api.setMeetingStatus(booking.scheduleId, 'CANCELLED').subscribe({
       next: () => { this.busyId.set(null); this.toast.show('Reunião cancelada', 'O horário voltou a ficar livre e o cliente foi avisado por e-mail.'); this.loadWeek(); },
-      error: (e: ApiError) => { this.busyId.set(null); const f = friendly(e, 'admin'); this.toast.show(f.title, f.message, 'error'); },
+      error: (e: ApiError) => { this.busyId.set(null); this.toast.error(friendly(e, 'admin')); },
     });
   }
 }

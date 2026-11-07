@@ -5,6 +5,7 @@ import { AdminIdleService } from '../../core/admin/admin-idle.service';
 import { ConfirmDialogComponent } from '../../shared/confirm-dialog.component';
 import { LoadingService, ToastService } from '../../core/state.services';
 import { ThemeService } from '../../core/theme.service';
+import { initials } from '../../core/utils';
 
 @Component({
   selector: 'ecm-admin-shell',
@@ -119,9 +120,7 @@ export class AdminShellComponent {
     { label: 'Técnicos', icon: 'engineering', link: '/admin/tecnicos' },
   ];
 
-  initials(name: string) {
-    return name.trim().split(/\s+/).slice(0, 2).map((p) => p[0]?.toUpperCase() ?? '').join('');
-  }
+  readonly initials = initials;
 
   @HostListener('document:keydown.escape') closeMobile() { this.mobileOpen.set(false); }
 }

@@ -1,5 +1,4 @@
-export interface LeadForm { name: string; role: string; company: string; phone: string; email: string; }
-export type Identification = LeadForm;
+export interface Identification { name: string; role: string; company: string; phone: string; email: string; }
 
 export interface DiagnosticInput { areaM2: number; workstations: number; monthlyEnergyBill: number; currentInfrastructure: string; }
 export interface DiagnosticResult extends DiagnosticInput {

@@ -6,6 +6,7 @@ import { brDateOf, dayKey, hourOf, monthYearOf, timeOf, weekdayOf } from '../cor
 import { FriendlyError, friendly } from '../core/errors';
 import { ApiError, Slot } from '../core/models';
 import { JourneyStore } from '../core/state.services';
+import { shortId } from '../core/utils';
 import { ErrorCardComponent } from '../shared/error-card.component';
 import { LoadingButtonComponent } from '../shared/loading-button.component';
 
@@ -210,7 +211,7 @@ export class AgendamentoPage implements OnInit {
   private readonly router = inject(Router);
 
   readonly report = this.store.report;
-  readonly shortId = computed(() => (this.report()?.id ?? '').slice(0, 8).toUpperCase());
+  readonly shortId = computed(() => shortId(this.report()?.id));
 
   readonly days = signal<DayView[]>([]);
   readonly status = signal<'loading' | 'ready' | 'error'>('loading');

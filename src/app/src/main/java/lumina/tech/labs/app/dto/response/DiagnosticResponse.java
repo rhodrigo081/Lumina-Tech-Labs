@@ -1,5 +1,7 @@
 package lumina.tech.labs.app.dto.response;
 
+import lumina.tech.labs.app.engine.DiagnosticEstimate;
+
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
@@ -16,11 +18,8 @@ public record DiagnosticResponse(
         BigDecimal co2ReductionTons,
         Instant calculatedAt
 ) {
-    public static DiagnosticResponse preview(BigDecimal consumptionReductionPct,
-                                             BigDecimal annualSavings,
-                                             BigDecimal paybackMonths,
-                                             BigDecimal co2ReductionTons) {
-        return new DiagnosticResponse(null, null, null, null, null,
-                consumptionReductionPct, annualSavings, paybackMonths, co2ReductionTons, null);
+    public static DiagnosticResponse preview(DiagnosticEstimate estimate) {
+        return new DiagnosticResponse(null, null, null, null, null, estimate.consumptionReductionPct(),
+                estimate.annualSavings(), estimate.paybackMonths(), estimate.co2ReductionTons(), null);
     }
 }

@@ -85,12 +85,9 @@ public class ScheduleService {
         if (!leadRepository.existsById(leadId)) {
             throw new LeadNotFoundException(leadId);
         }
-        scheduleRepository.findByLeadId(leadId)
-                .filter(s -> s.getStatus() != ScheduleStatus.CANCELLED)
-                .ifPresent(s -> {
-                    throw ApiException.conflict("LEAD_ALREADY_SCHEDULED",
-                            "This lead already has a meeting scheduled");
-                });
+        if (scheduleRepository.findByLeadId(leadId).filter(s -> s.getStatus() != ScheduleStatus.CANCELLED).isPresent()) {
+            throw ApiException.conflict("LEAD_ALREADY_SCHEDULED", "This lead already has a meeting scheduled");
+        }
 
         int claimed = slotRepository.claim(request.slotId(), SlotStatus.AVAILABLE, SlotStatus.BOOKED,
                 Instant.now().plus(minNotice));
@@ -106,8 +103,8 @@ public class ScheduleService {
         if (!technician.isActive()) {
             throw ApiException.conflict("SLOT_UNAVAILABLE", "This slot is no longer available");
         }
+        // claim() clears the persistence context, so entities are (re)loaded only after it.
         Lead lead = leadRepository.findById(leadId).orElseThrow(() -> new LeadNotFoundException(leadId));
-
         Schedule schedule = scheduleRepository.findByLeadId(leadId).orElseGet(() -> Schedule.builder().build());
         lead.assignSchedule(schedule);
         schedule.setTechnician(technician);
@@ -120,7 +117,7 @@ public class ScheduleService {
         createMeeting(schedule, lead, technician);
 
         Schedule saved = scheduleRepository.saveAndFlush(schedule);
-        eventPublisher.publishEvent(new ScheduleBookedEvent(saved.getId(), leadId));
+        eventPublisher.publishEvent(new ScheduleBookedEvent(saved.getId()));
         return toResponse(saved);
     }
 

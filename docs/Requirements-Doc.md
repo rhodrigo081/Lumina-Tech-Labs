@@ -37,7 +37,7 @@ graph TD
   - Projected carbon footprint reduction (tCO2/year).
 - **FR01.3 — Unlock Form (Gated Content):** To unlock the detailed report and PDF download, the visitor must provide:
   - Full name.
-  - Corporate email (with business domain validation, blocking generic emails such as @gmail.com or @hotmail.com).
+  - Email (corporate or personal providers such as @gmail.com or @hotmail.com are accepted since migration V3).
   - Business phone / WhatsApp number.
   - Job title / role at the company.
   - Company name.

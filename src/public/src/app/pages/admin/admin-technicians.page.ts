@@ -7,7 +7,7 @@ import { friendly } from '../../core/errors';
 import { ApiError } from '../../core/models';
 import { ToastService } from '../../core/state.services';
 import { LoadingButtonComponent } from '../../shared/loading-button.component';
-import { EMAIL_PATTERN, notBlank } from '../../core/utils';
+import { EMAIL_PATTERN, MAX, initials, notBlank } from '../../core/utils';
 
 @Component({
   selector: 'ecm-admin-technicians',
@@ -101,8 +101,8 @@ export class AdminTechniciansPage implements OnInit {
   readonly formError = signal<string | null>(null);
 
   readonly form = this.fb.group({
-    name: ['', [Validators.required, notBlank, Validators.maxLength(150)]],
-    email: ['', [Validators.required, Validators.email, Validators.pattern(EMAIL_PATTERN), Validators.maxLength(255)]],
+    name: ['', [Validators.required, notBlank, Validators.maxLength(MAX.name)]],
+    email: ['', [Validators.required, Validators.email, Validators.pattern(EMAIL_PATTERN), Validators.maxLength(MAX.email)]],
     specialty: ['', Validators.maxLength(150)],
     active: [true],
   });
@@ -112,7 +112,7 @@ export class AdminTechniciansPage implements OnInit {
   load() {
     this.api.technicians().subscribe({
       next: (t) => { this.technicians.set(t); this.loading.set(false); },
-      error: (e: ApiError) => { this.loading.set(false); const f = friendly(e, 'admin'); this.toast.show(f.title, f.message, 'error'); },
+      error: (e: ApiError) => { this.loading.set(false); this.toast.error(friendly(e, 'admin')); },
     });
   }
 
@@ -151,7 +151,5 @@ export class AdminTechniciansPage implements OnInit {
     });
   }
 
-  initials(name: string) {
-    return name.trim().split(/\s+/).slice(0, 2).map((p) => p[0]?.toUpperCase() ?? '').join('');
-  }
+  readonly initials = initials;
 }
