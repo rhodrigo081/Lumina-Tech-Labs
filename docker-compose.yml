@@ -43,8 +43,9 @@ services:
       DB_URL: jdbc:postgresql://${DB_HOST:?defina DB_HOST no .env}:${DB_PORT:?defina DB_PORT no .env}/postgres?sslmode=require&prepareThreshold=0
       DB_USER: ${DB_USER:?defina DB_USER no .env}
       DB_PASSWORD: ${DB_PASSWORD:?defina DB_PASSWORD no .env}
-      REDIS_HOST: redis
-      REDIS_PORT: 6379
+      REDIS_HOST: ${REDIS_HOST:-redis}
+      REDIS_PORT: ${REDIS_PORT:-6379}
+      REDIS_SSL: ${REDIS_SSL:-false}
       REDIS_PASSWORD: ${REDIS_PASSWORD:-}
       MAIL_HOST: ${MAIL_HOST:?defina MAIL_HOST no .env}
       MAIL_PORT: ${MAIL_PORT:?defina MAIL_PORT no .env}
