@@ -1,6 +1,6 @@
 .env
 .env.*
-!.env.example
+.env.example*
 *.pem
 *.key
 node_modules/
@@ -30,3 +30,4 @@ Thumbs.db
 logs/
 tmp/
 *.tmp
+render.yaml

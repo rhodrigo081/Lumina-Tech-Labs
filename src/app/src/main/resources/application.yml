@@ -45,8 +45,10 @@ spring:
           time_zone: UTC
   data:
     redis:
-      host: ${REDIS_HOST}
-      port: ${REDIS_PORT}
+      # Upstash/Render: defina SPRING_DATA_REDIS_URL=rediss://default:<senha>@<host>:6379
+      # (tem prioridade sobre host/port/password/ssl abaixo, usados no docker-compose local)
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
       password: ${REDIS_PASSWORD:}
       ssl:
         enabled: ${REDIS_SSL:false}
