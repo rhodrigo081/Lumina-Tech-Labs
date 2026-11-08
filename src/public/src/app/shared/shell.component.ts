@@ -84,7 +84,7 @@ const STORAGE_KEY = 'ecm.sidebar.collapsed';
       <div class="flex-1"><router-outlet /></div>
       <footer data-chrome class="mt-space-xl bg-surface-container-low px-gutter py-space-lg">
         <div class="max-w-[1280px] mx-auto flex flex-col md:flex-row items-center justify-between gap-space-sm">
-          <p class="font-body-sm text-body-sm text-on-surface-variant">© 2026 Lumina Tech Labs • DPO: dpo&#64;lumina.tech.labs.com.br</p>
+          <p class="font-body-sm text-body-sm text-on-surface-variant">© 2026 Lumina Tech Labs • DPO: rd-dev.com.br</p>
           <div class="flex items-center gap-space-sm flex-wrap justify-center">
             <span class="inline-flex items-center gap-1 px-space-sm py-1 rounded bg-tertiary-fixed text-on-tertiary-fixed-variant font-label-mono text-label-mono"><span class="material-symbols-outlined text-[14px]" aria-hidden="true">verified</span>ISO 50001 Aligned</span>
             <span class="inline-flex items-center gap-1 px-space-sm py-1 rounded bg-secondary-fixed text-on-secondary-fixed-variant font-label-mono text-label-mono"><span class="material-symbols-outlined text-[14px]" aria-hidden="true">shield</span>GHG Protocol Scope 2</span>

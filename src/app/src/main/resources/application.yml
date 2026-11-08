@@ -125,6 +125,19 @@ management:
   endpoint:
     health:
       show-details: never
+      probes:
+        enabled: true
+      # Container/platform health checks hit /actuator/health/readiness, which only covers what the
+      # API needs to serve requests. SMTP stays out: a mail outage is handled per request (503 on the
+      # contact form) and checking it would log into the mail server on every probe.
+      group:
+        readiness:
+          include: readinessState,db,redis
+        liveness:
+          include: livenessState
+  health:
+    mail:
+      enabled: false
   info:
     env:
       enabled: false

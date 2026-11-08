@@ -68,7 +68,7 @@ services:
       GOOGLE_REFRESH_TOKEN: ${GOOGLE_REFRESH_TOKEN:?defina GOOGLE_REFRESH_TOKEN no .env}
       GOOGLE_CALENDAR_ID: ${GOOGLE_CALENDAR_ID:-primary}
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:8080/actuator/health"]
+      test: ["CMD", "wget", "-qO-", "http://localhost:8080/actuator/health/readiness"]
       interval: 10s
       timeout: 5s
       retries: 10
